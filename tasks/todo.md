@@ -19,11 +19,18 @@
 
 ## Phase 1: Pipeline
 - [x] Repo skeleton, .gitignore, requirements.txt, git init
-- [ ] Ingest: Wikipedia tour tables (read_html on rendered HTML, cache raw pages)
+- [x] Package setup: pyproject.toml with src layout, editable install into .venv
+- [x] Clean: Wikipedia attendance parsing + tests (footnotes, header years, Total/leg rows,
+      multi-night runs collapsed into engagements, fill rate capped at 100% with over_capacity flag)
+- [x] Ingest: Wikipedia tour pages (MediaWiki API, cached raw JSON, artist from infobox) + tests
+- [x] Ingest: retry with Retry-After / exponential backoff after hitting HTTP 429 + tests
+- [ ] Ingest: full 2015-2025 run (in progress)
+- [ ] Sanity-check the parsed output: row counts, fill rate distribution, missing dates/countries,
+      co-headline share, spot-check a few tours against their pages
 - [ ] Ingest: Billboard Hot 100 + Billboard 200 CSVs
 - [ ] Ingest: Pollstar Top 300/200 PDFs (2019, 2022, 2023)
 - [ ] Ingest: Wikipedia pageviews per artist
-- [ ] Clean: attendance cell parsing, fill rate cap, multi-night runs, country tagging + tests
+- [ ] Clean: country tagging for the US + Canada subset (some tables have no Country column)
 - [ ] Clean: artist name normalization across sources + tests
 - [ ] Load into SQLite (schema.sql)
 - [ ] Features: as-of-show-date chart and pageview signals + tests (no leakage)
