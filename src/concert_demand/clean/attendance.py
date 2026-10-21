@@ -23,8 +23,24 @@ import pandas as pd
 # Footnote markers: "[a]", "[12]", "[note 3]"
 FOOTNOTE_PATTERN = re.compile(r"\[[^\]]*\]")
 
+# A count with thousands separators as editors actually type them: "31,580",
+# "31 580" (space or non-breaking space), "21, 000", European "120.000".
+# Any separator must be followed by exactly three digits, so "31 580" reads
+# as one number but a stray space never merges two unrelated numbers.
+NUMBER = r"\d{1,3}(?:(?:[,.]\s?|\s)\d{3})+|\d+"
+
 # "9,998 / 9,998" or "1,657,377 / 1,657,377 (100%)"
-ATTENDANCE_PATTERN = re.compile(r"^([\d,]+)\s*/\s*([\d,]+)")
+ATTENDANCE_PATTERN = re.compile(rf"^({NUMBER})\s*/\s*({NUMBER})")
+
+# "Total", "TOTAL", "Totals", "Grand Total", "Totals for the tour"
+TOTAL_LABEL_PATTERN = re.compile(r"^(grand\s+)?totals?\b", re.IGNORECASE)
+# A cell that is *only* a total label, with nothing else ("Total", "Totals:")
+TOTAL_CELL_PATTERN = re.compile(r"^(grand\s+)?totals?(\s+for\s+the\s+tour)?:?$", re.IGNORECASE)
+
+# No regular venue in the data sustains more than this per show. Higher
+# values are festivals or leg/run totals stuck on one row, so they're flagged
+# for exclusion from modeling rather than silently dropped.
+MAX_PLAUSIBLE_CAPACITY_PER_SHOW = 100_000
 
 # "$1,733,194" or "US$1,733,194". Other currencies are not converted.
 REVENUE_PATTERN = re.compile(r"^(?:US)?\$\s*([\d,]+(?:\.\d+)?)")
@@ -88,7 +104,7 @@ def parse_attendance(value):
     match = ATTENDANCE_PATTERN.match(strip_footnotes(value))
     if not match:
         return None, None
-    sold, capacity = (int(group.replace(",", "")) for group in match.groups())
+    sold, capacity = (int(re.sub(r"\D", "", group)) for group in match.groups())
     if capacity == 0:
         return None, None
     return sold, capacity
@@ -154,8 +170,9 @@ def standardize_columns(table):
     Parameters
     ----------
     table : pandas.DataFrame
-        Output of `pandas.read_html` for one tour table. Two-row headers
-        (column name plus tour leg) are flattened to the first row.
+        Output of `pandas.read_html` for one tour table. Multi-row headers
+        (column name, then year and/or tour leg) are flattened to the first
+        row, but every row is searched for the year.
 
     Returns
     -------
@@ -164,39 +181,55 @@ def standardize_columns(table):
         found in the date header (None if the header has no year).
     """
     table = table.copy()
+    # Full header text per column, all levels joined: ("Date", "2015", "Leg 1")
+    # -> "Date 2015 Leg 1". The name comes from the first level only.
     if isinstance(table.columns, pd.MultiIndex):
+        full_headers = [" ".join(map(str, levels)) for levels in table.columns]
         table.columns = table.columns.get_level_values(0)
+    else:
+        full_headers = [str(column) for column in table.columns]
 
     rename = {}
     header_year = None
-    for column in table.columns:
+    for position, column in enumerate(table.columns):
         header = str(column).strip().lower()
         for keyword, canonical in COLUMN_KEYWORDS.items():
             # First matching header wins if two map to the same name
             if header.startswith(keyword) and canonical not in rename.values():
-                rename[column] = canonical
+                rename[position] = canonical
                 if canonical == "date":
-                    year_match = YEAR_PATTERN.search(header)
+                    year_match = YEAR_PATTERN.search(full_headers[position])
                     header_year = int(year_match.group(1)) if year_match else None
                 break
 
-    table = table[list(rename)].rename(columns=rename)
+    # Select by position: flattened multi-row headers can repeat a name
+    table = table.iloc[:, list(rename)]
+    table.columns = list(rename.values())
     return table, header_year
 
 
 def _is_non_show_row(row):
-    """Flag "Total" rows and tour-leg divider rows.
+    """Flag total rows and tour-leg divider rows.
+
+    A total row has its label ("Total", "Grand Total", ...) in the date
+    column, spread across several merged cells, or as the entire contents
+    of any cell. Requiring one of those keeps a single venue cell like
+    "Total Energies Stadium" from matching.
 
     A leg divider like "North America" spans the full width of the table,
     so read_html repeats the same text in every cell.
     """
     values = [strip_footnotes(v) for v in row if isinstance(v, str)]
-    if any(v == "Total" for v in values):
+    total_cells = sum(bool(TOTAL_LABEL_PATTERN.match(v)) for v in values)
+    date_cell = strip_footnotes(row.get("date"))
+    if total_cells >= 2 or (isinstance(date_cell, str) and TOTAL_LABEL_PATTERN.match(date_cell)):
+        return True
+    if any(TOTAL_CELL_PATTERN.match(v) for v in values):
         return True
     return len(values) == len(row) and len(set(values)) == 1
 
 
-def clean_tour_table(table, tour):
+def clean_tour_table(table, tour, fallback_year=None):
     """Turn one raw tour table into one row per show with parsed fields.
 
     Parameters
@@ -205,6 +238,9 @@ def clean_tour_table(table, tour):
         Output of `pandas.read_html` for one tour table.
     tour : str
         Wikipedia title of the tour page, kept for traceability.
+    fallback_year : int, optional
+        Year to use when neither the date cell nor the column header has
+        one, e.g. from the table caption ("List of 2016 concerts").
 
     Returns
     -------
@@ -213,6 +249,8 @@ def clean_tour_table(table, tour):
         tickets_sold, capacity, revenue_usd.
     """
     table, header_year = standardize_columns(table)
+    # Year precedence: date cell > column header > caption
+    header_year = header_year if header_year is not None else fallback_year
     for column in SHOW_COLUMNS:
         if column not in table.columns:
             table[column] = pd.NA
@@ -233,6 +271,24 @@ def clean_tour_table(table, tour):
     })
     shows["show_date"] = pd.to_datetime(shows["show_date"])
     return shows.reset_index(drop=True)
+
+
+def _drop_figures_shared_across_venues(shows):
+    """Drop rows whose attendance figure is one merged cell spanning several venues.
+
+    Some pages report a whole tour leg as one merged cell covering different
+    arenas. read_html copies that leg total into every row, which would
+    credit each venue with the entire leg. Per-venue numbers can't be
+    recovered, so these rows are removed.
+
+    A block is consecutive rows with the same tour, attendance text and
+    revenue. Requiring identical revenue too keeps two separately reported
+    sellouts that happen to share a capacity from being dropped.
+    """
+    keys = shows[["tour", "attendance_raw", "revenue_usd"]].astype(str)
+    block_id = (keys != keys.shift()).any(axis=1).cumsum()
+    venues_per_block = shows.groupby(block_id)["venue"].transform("nunique")
+    return shows[venues_per_block <= 1].reset_index(drop=True)
 
 
 def collapse_engagements(shows):
@@ -256,6 +312,7 @@ def collapse_engagements(shows):
         sold_out and over_capacity. Rows without attendance are dropped.
     """
     shows = shows.dropna(subset=["tickets_sold", "capacity"]).reset_index(drop=True)
+    shows = _drop_figures_shared_across_venues(shows)
 
     key_columns = ["tour", "venue", "city", "attendance_raw"]
     keys = shows[key_columns].astype(str)
@@ -289,4 +346,12 @@ def collapse_engagements(shows):
     engagements["fill_rate"] = (
         engagements["tickets_sold"] / engagements["capacity"]
     ).clip(upper=1.0)
+
+    # Flags for rows to exclude from modeling. Kept in the data, not
+    # dropped, so every exclusion is visible and reversible.
+    engagements["capacity_per_show"] = engagements["capacity"] / engagements["n_shows"]
+    engagements["is_festival"] = engagements["venue"].str.contains(
+        "festival", case=False, na=False)
+    engagements["suspect_capacity"] = (
+        engagements["capacity_per_show"] > MAX_PLAUSIBLE_CAPACITY_PER_SHOW)
     return engagements

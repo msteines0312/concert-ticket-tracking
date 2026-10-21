@@ -6,4 +6,5 @@ matplotlib>=3.9
 requests>=2.32
 lxml>=5.2        # HTML parser behind pandas.read_html
 pypdf>=4.3       # text extraction from Pollstar year-end PDFs
+mwparserfromhell>=0.6  # parses Wikipedia infobox templates
 pytest>=8.2
