@@ -1,0 +1,9 @@
+pandas>=2.2
+numpy>=1.26
+scipy>=1.13
+scikit-learn>=1.5
+matplotlib>=3.9
+requests>=2.32
+lxml>=5.2        # HTML parser behind pandas.read_html
+pypdf>=4.3       # text extraction from Pollstar year-end PDFs
+pytest>=8.2

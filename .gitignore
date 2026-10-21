@@ -1,0 +1,31 @@
+# Data stays local. Sources have their own licenses (Pollstar is copyrighted),
+# and every file here can be rebuilt by running the ingest scripts.
+data/**
+!data/*/
+!data/**/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# Secrets and local config
+.env
+config.local.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Tableau workbooks with packaged extracts can embed the raw data
+*.twbx
+*.hyper
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
