@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "concert-demand"
+version = "0.1.0"
+description = "Do Billboard charts predict concert ticket sales?"
+requires-python = ">=3.11"
+
+# src layout: `pip install -e .` makes `import concert_demand` work everywhere
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
