@@ -44,7 +44,17 @@
 - [ ] Right-sizing score
 - [ ] Robustness checks
 
+## Licensing and attribution
+- [x] README "Data Sources and Licensing" section with citations
+- [ ] Source list: write wikipedia_sources.csv (title, URL, revision ID, retrieved date) for every article used
+- [ ] Decide where the source list lives so it's visible on GitHub (it's metadata, not data)
+- [ ] Power BI dashboard: credits on the report page, Wikipedia/Wikimedia data only, no Pollstar rows
+- [ ] Brief: sources footer
+- [ ] Add MIT LICENSE before making the repo public
+
 ## Phase 3: Deliverables
-- [ ] Tableau Public dashboard
+- [ ] Power BI dashboard (commit .pbit template + screenshots/GIF in README; .pbix is gitignored)
+  - First time using Power BI (Tableau background), so build it as a guided lesson:
+    Power Query, data model + relationships, DAX measures, visuals, each mapped to its Tableau equivalent
 - [ ] Talent buyer brief
 - [ ] README

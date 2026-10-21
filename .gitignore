@@ -20,9 +20,9 @@ venv/
 .pytest_cache/
 .ipynb_checkpoints/
 
-# Tableau workbooks with packaged extracts can embed the raw data
-*.twbx
-*.hyper
+# Power BI .pbix files embed the imported data. Commit the .pbit template
+# (report layout and queries, no data) instead.
+*.pbix
 
 # OS / editor
 .DS_Store
