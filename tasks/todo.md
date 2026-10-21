@@ -24,9 +24,21 @@
       multi-night runs collapsed into engagements, fill rate capped at 100% with over_capacity flag)
 - [x] Ingest: Wikipedia tour pages (MediaWiki API, cached raw JSON, artist from infobox) + tests
 - [x] Ingest: retry with Retry-After / exponential backoff after hitting HTTP 429 + tests
-- [ ] Ingest: full 2015-2025 run (in progress)
-- [ ] Sanity-check the parsed output: row counts, fill rate distribution, missing dates/countries,
-      co-headline share, spot-check a few tours against their pages
+- [x] Ingest: switched to batched wikitext + REST HTML; parity check on 99 pages = identical output
+- [x] Ingest: fixed User-Agent (unidentified clients are capped at 10 req/min, compliant bots get 200)
+- [x] Ingest: full 2015-2025 run. 1,349 pages, 0 rate-limit errors
+- [x] Sanity-check the parsed output. Found and fixed 5 parser bugs (each with tests):
+  - Total rows labeled TOTAL / Totals / Grand Total, or only in the venue column
+  - Thousands separators as spaces, ", " and European periods ("120.000")
+  - Year in a lower header row or the table caption (missing dates 671 -> 257)
+  - One-line infoboxes: artist now read with mwparserfromhell (missing artist 487 -> 10)
+  - Leg totals merged across different venues: dropped
+- [x] Flags instead of deletes: is_festival (27), suspect_capacity > 100K per show (34)
+- [x] Validation: 73% of tours with a page Total row match it within 0.5%. Mismatches checked
+      by hand trace to the pages' own Total rows (subset totals, typos), not the parser
+- Result: 13,300 engagements, 437 tours, 245 artists. Model-ready (artist + date, no flags):
+  12,988 worldwide, 8,279 US + Canada (7,340 since pageviews start, Jul 2015), 69% sold out
+- [ ] Validate against Pollstar rows once that ingest exists (independent check)
 - [ ] Ingest: Billboard Hot 100 + Billboard 200 CSVs
 - [ ] Ingest: Pollstar Top 300/200 PDFs (2019, 2022, 2023)
 - [ ] Ingest: Wikipedia pageviews per artist
@@ -57,4 +69,5 @@
   - First time using Power BI (Tableau background), so build it as a guided lesson:
     Power Query, data model + relationships, DAX measures, visuals, each mapped to its Tableau equivalent
 - [ ] Talent buyer brief
+- [ ] docs/ai_collaboration_log.md: keep updated as decisions happen, final pass at the end
 - [ ] README
