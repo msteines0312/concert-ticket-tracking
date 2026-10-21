@@ -39,7 +39,11 @@
 - Result: 13,300 engagements, 437 tours, 245 artists. Model-ready (artist + date, no flags):
   12,988 worldwide, 8,279 US + Canada (7,340 since pageviews start, Jul 2015), 69% sold out
 - [ ] Validate against Pollstar rows once that ingest exists (independent check)
-- [ ] Ingest: Billboard Hot 100 + Billboard 200 CSVs
+- [x] Ingest: Billboard Hot 100 + Billboard 200 CSVs, pinned to archive commit + tests
+  - 976,949 entries: Hot 100 1958-2026, Billboard 200 1967-2026
+  - Known issues (logged, not patched): 42 verbatim duplicate rows dropped; 23 incomplete
+    Billboard 200 weeks before 1990; tied ranks in old charts kept; Billboard 200 has only
+    100 of 200 entries since 2026-09-26 (archive scraper, cause unconfirmed). Re-check on refresh
 - [ ] Ingest: Pollstar Top 300/200 PDFs (2019, 2022, 2023)
 - [ ] Ingest: Wikipedia pageviews per artist
 - [ ] Clean: country tagging for the US + Canada subset (some tables have no Country column)
