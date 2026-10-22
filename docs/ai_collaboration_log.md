@@ -71,4 +71,6 @@ Part 1 is a logistic regression for the chance of selling out. Part 2 predicts h
 ## 12. Popularity beyond Billboard: streaming and social signals
 **My idea.** I raised that Billboard and radio don't capture modern popularity on their own: some songs are widely known without charting high, and Spotify, Apple Music and TikTok-style platforms drive discovery.
 
-**Research findings.** Since 2013 the Hot 100 already counts streaming and YouTube, so Billboard isn't radio-only, but its top-100 cutoff misses widely known songs that never rank. Spotify's Top 200 (with stream counts) and Viral 50 charts are available for 2017-2021 under an open database license. TikTok's Billboard chart existed only from 2023 to 2025 and sits behind a paywall, and Apple Music has no public history. *Decision pending.*
+**Research findings.** Since 2013 the Hot 100 already counts streaming and YouTube, so Billboard isn't radio-only, but its top-100 cutoff misses widely known songs that never rank. Spotify's Top 200 (with stream counts) and Viral 50 charts are available for 2017-2021 under an open database license. TikTok's Billboard chart existed only from 2023 to 2025 and sits behind a paywall, and Apple Music has no public history.
+
+**Decision (accepted recommendation).** The main model uses Billboard plus Wikipedia pageviews across 2015-2025. A separate 2017-2021 sub-analysis tests whether Spotify US stream counts and Viral 50 virality add predictive power on top. TikTok and Apple Music are documented as limitations and future work.

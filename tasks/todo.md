@@ -52,7 +52,12 @@
     Tour, Top Dawg Entertainment, Various Artists)
   - Former names from filtered Wikipedia redirects + hand-checked aliases; audit in alias_matches.csv
   - 244 of 255 tour artists matched; 212,563 credits (200,904 lead, 11,659 featured)
-- [ ] Decide: Spotify Top 200 + Viral 50 (Kaggle, 2017-2021) as a streaming sub-analysis
+- [x] Decide: Spotify Top 200 + Viral 50 (Kaggle, 2017-2021) as a streaming sub-analysis
+- [ ] Matt: create Kaggle API token (saved outside the repo at ~/.kaggle/kaggle.json)
+- [ ] Ingest: Spotify charts, keep US + Canada rows only, match credits with CreditMatcher + tests
+- [ ] Ingest: Wikipedia pageviews per artist (daily, Jul 2015 onward)
+- [ ] README: limitations section (TikTok chart 2023-25 paywalled, no Apple Music history,
+      Spotify data ends 2021, Hot 100 top-100 cutoff)
 - [ ] Load into SQLite (schema.sql)
 - [ ] Features: as-of-show-date chart and pageview signals + tests (no leakage)
 - [ ] SQL analysis layer (CTEs, window functions)
