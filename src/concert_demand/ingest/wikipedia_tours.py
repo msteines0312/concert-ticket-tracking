@@ -46,6 +46,8 @@ from concert_demand.clean.attendance import (
     strip_footnotes,
 )
 from concert_demand.clean.countries import tag_countries
+from concert_demand.clean.covid import assign_covid_era
+from concert_demand.clean.shared_shows import merge_shared_shows
 from concert_demand.paths import INTERIM_DIR, RAW_DIR
 
 API_URL = "https://en.wikipedia.org/w/api.php"
@@ -539,6 +541,8 @@ def run(start_year, end_year, output_path=OUTPUT_PATH, sources_path=SOURCES_PATH
     filled = engagements["country_source"].isin(["city_lookup", "tour_neighbors"]).sum()
     logger.info("Filled %d blank countries, %d still blank",
                 filled, engagements["country"].isna().sum())
+    engagements = merge_shared_shows(engagements)
+    engagements["covid_era"] = assign_covid_era(engagements["first_date"])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     engagements.to_csv(output_path, index=False)
