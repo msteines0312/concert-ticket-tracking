@@ -19,7 +19,8 @@ the end of all four lines. That makes the artist / support split ambiguous
 date plus a prefix comparison of the artist name instead of an exact split.
 
 Only the 2022 and 2023 Top 300 have a text layer. The 2019 Top 200 is a
-scanned image and needs OCR, so it is downloaded but not parsed.
+scanned image with a different layout, read with OCR in pollstar_ocr.py.
+It adds the only pre-COVID validation.
 
 Usage
 -----
@@ -36,6 +37,7 @@ import pandas as pd
 from pypdf import PdfReader
 
 from concert_demand.clean.artist_names import normalize_name
+from concert_demand.ingest import pollstar_ocr
 from concert_demand.ingest.wikipedia_tours import OUTPUT_PATH as ENGAGEMENTS_PATH
 from concert_demand.ingest.wikipedia_tours import build_session
 from concert_demand.paths import INTERIM_DIR, RAW_DIR
@@ -47,7 +49,9 @@ PDF_URLS = {
     2022: "https://data.pollstar.com/chart/2022/12/121222.top.300.concert.grosses_1027.pdf",
     2023: "https://data.pollstar.com/Chart/2024/01/121123_ye.top300.concert.grosses_digital_1040.pdf",
 }
-TEXT_LAYER_YEARS = [2022, 2023]  # 2019 is image-only
+TEXT_LAYER_YEARS = [2022, 2023]
+OCR_YEAR = 2019                  # scanned image, see pollstar_ocr.py
+OCR_PAGES = 5
 
 CACHE_DIR = RAW_DIR / "pollstar"
 OUTPUT_PATH = INTERIM_DIR / "pollstar_grosses.csv"
@@ -289,11 +293,27 @@ def summarize_matches(matches, pollstar):
 # Entry point
 # ---------------------------------------------------------------------------
 
+def load_ocr_year(refresh=False):
+    """Parse the scanned 2019 chart, reusing cached OCR text unless refreshing.
+
+    OCR takes a few minutes, so its raw text is saved next to the PDF.
+    """
+    text_path = CACHE_DIR / f"pollstar_{OCR_YEAR}_ocr.txt"
+    if refresh or not text_path.exists():
+        text_path.write_text(pollstar_ocr.ocr_pdf(CACHE_DIR / f"pollstar_{OCR_YEAR}.pdf", OCR_PAGES),
+                             encoding="utf-8")
+    shows, dropped = pollstar_ocr.parse_ocr_text(text_path.read_text(encoding="utf-8"), OCR_YEAR)
+    logger.info("Pollstar %d: %d rows dropped as OCR misreads (failed the tickets check)",
+                OCR_YEAR, dropped)
+    return shows
+
+
 def run(refresh=False):
-    """Download, parse and validate. Returns the summary dict."""
+    """Download, parse and validate. Returns the summary dict, overall and per year."""
     download_pdfs(build_session(), refresh=refresh)
     pollstar = pd.concat(
-        [parse_text(extract_text(CACHE_DIR / f"pollstar_{year}.pdf"), year) for year in TEXT_LAYER_YEARS],
+        [parse_text(extract_text(CACHE_DIR / f"pollstar_{year}.pdf"), year) for year in TEXT_LAYER_YEARS]
+        + [load_ocr_year(refresh)],
         ignore_index=True,
     )
     for year, rows in pollstar.groupby("chart_year"):
@@ -304,7 +324,11 @@ def run(refresh=False):
     matches = match_to_wikipedia(pollstar, engagements)
     matches.to_csv(MATCHES_PATH, index=False)
     summary = summarize_matches(matches, pollstar)
-    logger.info("Validation summary: %s", summary)
+    logger.info("Validation summary, all years: %s", summary)
+    # Per year, so the pre-COVID check (2019) can be compared with 2022-23
+    for year, rows in pollstar.groupby("chart_year"):
+        year_matches = match_to_wikipedia(rows, engagements)
+        logger.info("Validation summary, %d: %s", year, summarize_matches(year_matches, rows))
     return summary
 
 

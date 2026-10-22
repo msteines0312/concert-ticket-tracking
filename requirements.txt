@@ -6,6 +6,7 @@ matplotlib>=3.9
 requests>=2.32
 lxml>=5.2        # HTML parser behind pandas.read_html
 pypdf>=4.3       # text extraction from Pollstar year-end PDFs
+pillow>=10.0     # cleans up scanned pages before OCR (2019 Pollstar)
 mwparserfromhell>=0.6  # parses Wikipedia infobox templates
 kaggle>=1.7       # downloads the Spotify charts dataset (needs a Kaggle API token)
 pytest>=8.2
