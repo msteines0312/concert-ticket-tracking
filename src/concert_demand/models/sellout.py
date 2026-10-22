@@ -337,6 +337,16 @@ def explanatory_model(dataset, dummies, ladder, blocks):
         raise RuntimeError("Explanatory model did not converge; check for separation")
 
     block_of = {c: b for b in blocks for c in block_columns([b], dummies.columns)}
+    # Joint test per block: are all of its coefficients zero? The chart flag
+    # and chart points move together, so single coefficients understate a
+    # block; the Wald test uses the clustered covariance.
+    block_p = {}
+    for block in blocks:
+        members = [c for c in columns if block_of[c] == block]
+        restriction = np.zeros((len(members), len(fit.params)))
+        for row, column in enumerate(members):
+            restriction[row, fit.params.index.get_loc(column)] = 1
+        block_p[block] = float(fit.wald_test(restriction, scalar=True).pvalue)
     ci = fit.conf_int()
     table = pd.DataFrame({
         "predictor": columns,
@@ -349,6 +359,7 @@ def explanatory_model(dataset, dummies, ladder, blocks):
         "ci_high": np.exp(ci.loc[columns, 1]).to_numpy(),
         "standardized": [c in continuous for c in columns],
     })
+    table["block_wald_p"] = table["block"].map(block_p)
     table["n_shows"] = int(fit.nobs)
     table["n_artists"] = len(np.unique(groups))
     return table
