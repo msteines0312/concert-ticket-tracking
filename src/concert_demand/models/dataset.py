@@ -19,7 +19,14 @@ jump from 1K to 2K views a day should count more than 30K to 31K.
 History. For the harder baseline, each show gets the billed artist's most
 recent other tour, worldwide, using only shows that ended before this show's
 cutoff (six months before the show), so nothing is known that a buyer
-couldn't have known at booking. Its average ticket price is converted to
+couldn't have known at booking. The tour needs at least
+MIN_PREV_TOUR_SHOWS finished shows, otherwise the one before it is used.
+Without that floor, "most recent" picked tours that had barely started at
+the cutoff (Bad Bunny's El Ultimo Tour del Mundo, 1 show in) or a small side
+tour running alongside the main one (Ed Sheeran's - Tour), and pages that
+list only one box score row (Future Hndrxx Tour). Both sellout rate and mean
+fill rate are kept, since a 96%-full show and a 60%-full show are both "not
+sold out". The previous tour's average ticket price is converted to
 constant dollars, because same-show price leaks the outcome (sellouts push
 it up) but the previous tour's price was set before this show went on sale.
 
@@ -40,6 +47,7 @@ from concert_demand.load_db import DB_PATH
 from concert_demand.paths import PROCESSED_DIR
 
 TRAIN_END = pd.Timestamp("2019-01-01")   # tours starting before this train the model
+MIN_PREV_TOUR_SHOWS = 5                  # Matt: fewer finished shows is too noisy to use
 CHARTS = ["hot100", "billboard200"]
 PRICE_COLUMN = f"prev_tour_price_{BASE_YEAR}usd"
 
@@ -117,7 +125,7 @@ def usable_history(engagements, cpi_annual):
 
 
 def summarize_tour(tour_shows):
-    """Sellout rate and average real ticket price over one tour's shows.
+    """Sellout rate, fill rate and average real ticket price over one tour's shows.
 
     Price is total revenue over total tickets (so big engagements weigh
     more), using only rows that report both.
@@ -125,21 +133,24 @@ def summarize_tour(tour_shows):
     Returns
     -------
     dict
-        prev_tour_shows, prev_tour_sellout_rate, and the price column.
+        prev_tour_shows, prev_tour_sellout_rate, prev_tour_fill_rate, and
+        the price column.
     """
     priced = tour_shows[tour_shows["revenue_real"].notna() & (tour_shows["tickets_sold"] > 0)]
     price = (priced["revenue_real"].sum() / priced["tickets_sold"].sum()
              if len(priced) else np.nan)
     return {"prev_tour_shows": len(tour_shows),
             "prev_tour_sellout_rate": tour_shows["sold_out"].mean(),
+            "prev_tour_fill_rate": tour_shows["fill_rate"].mean(),
             PRICE_COLUMN: price}
 
 
-def previous_tour_history(shows, history):
+def previous_tour_history(shows, history, min_shows=MIN_PREV_TOUR_SHOWS):
     """Describe each show's previous tour, as known at the show's cutoff.
 
     The previous tour is the billed artist's other tour whose latest show
-    before the cutoff is the most recent. Only shows that ended before the
+    before the cutoff is the most recent, among tours with at least
+    `min_shows` shows finished by then. Only shows that ended before the
     cutoff count, so a tour still running at booking time is summarized
     by its shows so far.
 
@@ -149,12 +160,15 @@ def previous_tour_history(shows, history):
         engagement_id, artist, tour, cutoff_date.
     history : pandas.DataFrame
         Output of `usable_history`.
+    min_shows : int
+        Fewest finished shows a tour needs to count as the previous tour.
 
     Returns
     -------
     pandas.DataFrame
         One row per show: engagement_id, prev_tour (null with no history),
-        prev_tour_shows, prev_tour_sellout_rate and the price column.
+        prev_tour_shows, prev_tour_sellout_rate, prev_tour_fill_rate and
+        the price column.
     """
     empty = {"prev_tour": None, **summarize_tour(history.iloc[0:0])}
     empty["prev_tour_shows"] = 0
@@ -166,9 +180,11 @@ def previous_tour_history(shows, history):
         row = {"engagement_id": show.engagement_id, **empty}
         if past is not None:
             earlier = past[(past["tour"] != show.tour) & (past["last_date"] < show.cutoff_date)]
-            if not earlier.empty:
+            tours = earlier.groupby("tour")["last_date"].agg(["max", "size"])
+            tours = tours[tours["size"] >= min_shows]
+            if not tours.empty:
                 # sort_index makes ties between tours resolve the same way every run
-                latest = earlier.groupby("tour")["last_date"].max().sort_index().idxmax()
+                latest = tours["max"].sort_index().idxmax()
                 row.update(prev_tour=latest, **summarize_tour(earlier[earlier["tour"] == latest]))
         rows.append(row)
     return pd.DataFrame(rows)
