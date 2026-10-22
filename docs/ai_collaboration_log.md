@@ -51,6 +51,8 @@ Part 1 is a logistic regression for the chance of selling out. Part 2 predicts h
 
 **Outcome.** Because of that condition, the new method was tested before the full run: old and new downloads were compared page by page on the 99 tours already fetched, and all 99 produced identical engagements. The test also exposed that the faster method alone didn't fix the speed. The real cause was Wikipedia's 2026 rate-limit policy, which caps clients it can't identify at 10 requests per minute, and our User-Agent header didn't meet its format. Fixing the header moved us to the 200 per minute tier. If the switch had been accepted without testing, the pipeline would have stayed slow with the wrong explanation in the code.
 
+**Follow-up.** When the pageviews download passed 30 minutes, I asked for its efficiency to be checked. It was healthy (no errors, no retries, one process) and running at the pace we chose on purpose to stay under the rate limit. Restarting would have saved a few minutes at most and risked getting throttled again, so we let it finish.
+
 ## 9. This log
 **My call.** I asked for this record to be kept throughout the project so the process is as reviewable as the code.
 
@@ -76,7 +78,25 @@ Part 1 is a logistic regression for the chance of selling out. Part 2 predicts h
 
 **Decision (accepted recommendation).** The main model uses Billboard plus Wikipedia pageviews across 2015-2025. A separate 2017-2021 sub-analysis tests whether Spotify US stream counts and Viral 50 virality add predictive power on top. TikTok and Apple Music are documented as limitations and future work.
 
+**Follow-up.** I asked about Tidal and SoundCloud too. Neither has a usable chart history, and Billboard already counts streams from Apple Music, Tidal and SoundCloud in its charts. So they're covered inside the Billboard signal, just not separately, and the README will say so.
+
 ## 13. Puerto Rico: inside the US market, but flagged
 **My call.** The AI asked whether Puerto Rico's shows belong in the US + Canada analysis. I said yes, since Billboard's US charts cover it, but required that it be marked separately because listening there is culturally different (much more Latin music), so a US chart signal may not track local demand the same way.
 
 **Outcome.** Puerto Rico shows count toward the US + Canada sample and carry their own `is_puerto_rico` flag, so models can control for the difference and it can be tested once features exist. There are only 18 model-ready Puerto Rico shows, which will be noted as a limitation.
+
+## 14. Data readiness audit before building on the data
+**My call.** Before moving on to the database and features, I asked whether we actually had all the data we needed and whether it was properly cleaned. I wanted an explicit check, not an assumption.
+
+**Outcome.** The audit checked every dataset for duplicates, impossible values, time coverage and stale files, and found problems that would have reached the model:
+- The same show was listed on two artists' tour pages 15 times (for example, Kenny Chesney and Jason Aldean merged their tours for ten 2015 stadium shows). Left alone, one sellout would count twice. Each case was checked against the tour pages and merged into one row, keeping co-headliners and dropping openers.
+- Three shows have sources that disagree, so they're flagged and kept out of the model instead of guessing which page is right.
+- About 500 US shows from 2012 to 2015 happened before Wikipedia pageview data begins, so they can only be used in a chart-only comparison.
+- 454 redirects to artist pages were once separate articles ("Drake discography", 25.5 million views). Counting them would put a fake jump in an artist's popularity on the day the pages were merged, so they're excluded.
+
+I accepted the AI's recommendations on how to fix each one.
+
+## 15. COVID: a comparison, not just a footnote
+**Redirected.** The AI proposed keeping 2020-21 shows with a COVID flag and running one robustness check without them. I wanted COVID to be part of the analysis itself: compare shows before and after the shutdown, since fans came back with pent-up demand and different habits.
+
+**Outcome.** Every show is labeled pre, during or post shutdown (March 12, 2020 to August 1, 2021). There are only 5 model-ready US shows during the shutdown, so the comparison is pre (6,165 shows) vs. post (2,194 shows): does the same chart or pageview signal predict sellouts differently after COVID?

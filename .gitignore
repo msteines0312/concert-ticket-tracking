@@ -7,6 +7,10 @@ data/**
 *.sqlite
 *.sqlite3
 
+# Working notes (task list, lessons) stay local. The AI collaboration log
+# in docs/ is the public record of how the project was directed.
+tasks/
+
 # Secrets and local config
 .env
 config.local.*
