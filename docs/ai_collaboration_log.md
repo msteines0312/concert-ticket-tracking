@@ -211,3 +211,12 @@ I went through a second batch of choices about what goes into the models. I acce
 
 **My call (tours still in progress).** Under the new rule, a tour still running at the cutoff can count once it has 5 finished shows (Bad Bunny's later World's Hottest dates use El Último Tour del Mundo). I chose to keep it as is.
 
+## 29. How the sellout model is built up
+I accepted the AI's recommendation on each of these after comparing the options:
+
+- **Career chart history** is its own block, separate from the last year's chart activity, so the results can tell buzz (charting now) from legacy (having a catalog).
+- **Both orders:** charts and pageviews overlap, and whichever enters the model first gets credit for what they share. Running charts-first and pageviews-first shows what each adds that the other doesn't.
+- **Plain logistic regression,** no penalty, so the coefficients and the test scores describe the same model.
+
+**Outcome.** One fix came up during the build: the explanatory model failed to converge. The AI traced it to 2016 (1 show) and 2026 (11 shows, one artist), where every show sold out, which makes the best-fitting year coefficient infinitely large. Those years were folded into 2017 and 2025, and the code now stops with an error if the fit doesn't converge instead of reporting unreliable numbers.
+
