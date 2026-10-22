@@ -106,6 +106,8 @@ I accepted the AI's recommendations on how to fix each one.
 
 **Outcome.** Signals are measured as of six months before each show. The show-date version is kept only as a robustness check.
 
+**Follow-up.** The feature build enforces the cutoff with a test: flooding every source with fake hype from the cutoff through the show date leaves every feature unchanged. To make sure the test can actually fail, the code was broken on purpose (counting data from the cutoff day itself), and the test caught it.
+
 ## 17. Lookback windows: more data, but only if it isn't noise
 **Redirected.** The AI offered three choices: a 52-week window plus 13-week momentum (its recommendation), a 26-week window, or building several windows and letting the model choose. It warned that the last option risks overfitting. I asked for a mix: build the extra windows, but keep one only if it actually improves the model.
 
