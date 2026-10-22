@@ -5,7 +5,12 @@ import pytest
 import requests
 
 from concert_demand.ingest import pageviews
-from concert_demand.ingest.pageviews import combine_artist_views, fetch_daily_views, parse_views
+from concert_demand.ingest.pageviews import (
+    combine_artist_views,
+    fetch_daily_views,
+    is_work_title,
+    parse_views,
+)
 
 
 def _payload(rows):
@@ -90,3 +95,34 @@ def test_combine_artist_views_aligns_series_with_different_dates():
     assert combined.loc["2020-01-01", "views_total"] == 3
     assert combined.loc["2020-01-01", "views_canonical"] == 0
     assert combined.loc["2020-01-02", "views_total"] == 10
+
+
+def test_combine_artist_views_fills_days_without_views_with_zero():
+    # The API leaves out days with no views, so a gap must become an explicit 0
+    canonical = pd.Series([5, 7], index=pd.to_datetime(["2020-01-01", "2020-01-04"]))
+    days = pd.date_range("2020-01-01", "2020-01-04")
+    combined = combine_artist_views("X", canonical, [], days=days)
+    assert combined["views_total"].tolist() == [5, 0, 0, 7]
+    assert combined["date"].tolist() == list(days)
+
+
+@pytest.mark.parametrize("title", [
+    "Drake discography",
+    "List of One Direction members",
+    "Legacy of Madonna",
+    "Unbreakable (Madison Beer song)",
+    "PTSD (Rod Wave mixtape)",
+    "Ghetto Gospel (EP)",
+])
+def test_is_work_title_catches_pages_about_works_and_lists(title):
+    assert is_work_title(title)
+
+
+@pytest.mark.parametrize("title", [
+    "Sia (musician)",  # the page's own former title
+    "Lady Antebellum",
+    "Bangtan Boys",
+    "Tyla (South African singer)",
+])
+def test_is_work_title_keeps_former_names(title):
+    assert not is_work_title(title)

@@ -8,9 +8,13 @@ actually requested, so before Lady Antebellum became Lady A in 2020, the
 band's views were recorded under the old title. Each artist's total is
 therefore the current title plus every redirect pointing to it: all
 traffic that landed on the artist's article. Unlike chart matching, this
-is safe for every redirect, because a redirect always leads to the
-artist's own page. The current-title-only count is kept as a separate
-column for robustness checks.
+is safe for nearly every redirect, because a redirect always leads to the
+artist's own page. The exception is a redirect from a page about a work or
+a list ("Drake discography", "List of U2 concert tours"). Those were
+separate articles for years before being merged into the artist page, so
+adding their history would put an artificial jump in the series on the
+day of the merge. They're excluded. The current-title-only count is kept
+as a separate column for robustness checks.
 
 Pageview data is released under CC0 by the Wikimedia Foundation. Only
 human readers are counted (agent=user), which excludes bots and crawlers.
@@ -24,6 +28,7 @@ import argparse
 import hashlib
 import json
 import logging
+import re
 from datetime import date, timedelta
 from urllib.parse import quote
 
@@ -42,7 +47,28 @@ ENGAGEMENTS_PATH = INTERIM_DIR / "wikipedia_engagements.csv"
 REDIRECTS_PATH = INTERIM_DIR / "artist_redirects.csv"
 OUTPUT_PATH = INTERIM_DIR / "pageviews_daily.csv"
 
+# Redirects from pages about works or lists, not alternate names for the artist
+WORK_TITLE_PATTERN = re.compile(
+    r"discography|videography|filmography|^List of |^Legacy of "
+    r"|\((?:[^)]*\s)?(?:album|EP|song|single|mixtape|tour|film|documentary|TV series|book)\)",
+    re.IGNORECASE,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def is_work_title(title):
+    """True if a redirect title names a work or list rather than the artist.
+
+    Parameters
+    ----------
+    title : str
+
+    Returns
+    -------
+    bool
+    """
+    return bool(WORK_TITLE_PATTERN.search(title))
 
 
 def _cache_path(title, cache_dir):
@@ -111,7 +137,7 @@ def fetch_daily_views(session, title, cache_dir=CACHE_DIR, end=None):
     return parse_views(payload)
 
 
-def combine_artist_views(artist, canonical_views, redirect_views):
+def combine_artist_views(artist, canonical_views, redirect_views, days=None):
     """Add an artist's redirect traffic to their current title's views.
 
     Parameters
@@ -121,6 +147,10 @@ def combine_artist_views(artist, canonical_views, redirect_views):
         Daily views of the current title.
     redirect_views : list of pandas.Series
         Daily views of each redirect (former names, alternate spellings).
+    days : pandas.DatetimeIndex, optional
+        Every date to include. The API omits days with no views, so passing
+        the full calendar turns those gaps into explicit zeros. Defaults to
+        the dates seen in any series.
 
     Returns
     -------
@@ -129,7 +159,7 @@ def combine_artist_views(artist, canonical_views, redirect_views):
         from a series count as zero views.
     """
     series = [canonical_views, *redirect_views]
-    all_dates = sorted(set().union(*(s.index for s in series)))
+    all_dates = days if days is not None else sorted(set().union(*(s.index for s in series)))
     aligned = [s.reindex(all_dates, fill_value=0) for s in series]
     return pd.DataFrame({
         "artist": artist,
@@ -152,7 +182,12 @@ def run(output_path=OUTPUT_PATH):
     """Fetch, combine and save daily pageviews for every tour artist."""
     session = wikipedia_tours.build_session()
     artists = tour_artists(pd.read_csv(ENGAGEMENTS_PATH))
-    redirects = pd.read_csv(REDIRECTS_PATH).groupby("artist")["redirect"].apply(list).to_dict()
+    redirects = pd.read_csv(REDIRECTS_PATH)
+    work_titles = redirects["redirect"].map(is_work_title)
+    logger.info("Skipping %d redirects from pages about works or lists", work_titles.sum())
+    redirects = redirects[~work_titles].groupby("artist")["redirect"].apply(list).to_dict()
+    # Same calendar for every artist, so a day with no views is a 0, not a gap
+    days = pd.date_range(FIRST_DAY, date.today() - timedelta(days=1))
     total_titles = len(artists) + sum(len(redirects.get(a, [])) for a in artists)
     logger.info("%d artists, %d titles including redirects", len(artists), total_titles)
 
@@ -160,7 +195,7 @@ def run(output_path=OUTPUT_PATH):
     for artist in artists:
         canonical = fetch_daily_views(session, artist)
         redirect_series = [fetch_daily_views(session, r) for r in redirects.get(artist, [])]
-        frames.append(combine_artist_views(artist, canonical, redirect_series))
+        frames.append(combine_artist_views(artist, canonical, redirect_series, days=days))
         fetched += 1 + len(redirect_series)
         logger.info("%d / %d titles", fetched, total_titles)
 
