@@ -26,6 +26,8 @@ def _model_dataset():
         "pageviews_mean_52w": [9000.0, 11000.0, 400.0],
         "hot100_lead_entries_career": [30, 31, 0],
         "billboard200_lead_entries_career": [80, 82, 0],
+        # The real model_dataset carries this too; build_shows must not collide with it.
+        "prev_tour_fill_rate": [0.85, 0.85, np.nan],
     })
 
 

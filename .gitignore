@@ -7,6 +7,11 @@ data/**
 # They are original judgments about Wikipedia articles (CC BY-SA).
 !data/labels/
 !data/labels/**
+# Dashboard tables are small aggregates committed so the Power BI template
+# opens without running the pipeline. Billboard data appears only as
+# quarterly point totals (chart data is copyrighted).
+!data/dashboard/
+!data/dashboard/**
 *.db
 *.sqlite
 *.sqlite3
@@ -14,6 +19,9 @@ data/**
 # Working notes (task list, lessons) stay local. The AI collaboration log
 # in docs/ is the public record of how the project was directed.
 tasks/
+
+# Brainstorm mockups and plan-execution scratch from the AI tooling
+.superpowers/
 
 # Secrets and local config
 .env

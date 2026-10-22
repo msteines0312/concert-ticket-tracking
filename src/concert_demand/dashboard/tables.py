@@ -50,7 +50,11 @@ def build_shows(model_dataset, right_sizing_shows):
     -------
     pandas.DataFrame
     """
-    shows = model_dataset.merge(
+    # Take only the show columns needed: model_dataset also has prev_tour_fill_rate,
+    # and merging two copies would rename both (_x, _y).
+    show_columns = ["engagement_id", "artist", "tour", "first_date", "capacity_per_show",
+                    "sold_out", "fill_rate"]
+    shows = model_dataset[show_columns].merge(
         right_sizing_shows[["engagement_id", "room_ratio", "prev_tour_fill_rate", "upsized_past_rule"]],
         on="engagement_id", how="left")
     shows["tour_key"] = tour_key(shows)
