@@ -1,9 +1,90 @@
 # Do Billboard Charts Predict Concert Ticket Sales?
 
-Work in progress. This project tests whether Billboard chart success predicts how well an artist actually sells tickets, and compares it against Wikipedia pageviews as an alternative popularity signal. The goal is a practical answer for talent buyers: which signal should you trust when choosing a venue size, and which artists are booked into rooms too big or too small for their demand?
+A data pipeline and set of models that test whether Billboard chart success, measured when a show is booked, predicts whether it sells out. It is built for talent buyers deciding what size room to put an artist in. The short answer is no: recent chart buzz barely improves the forecast, while how full the artist's last tour was does say something about whether moving them up a room size will work.
+
+## Results
+- **Chart buzz doesn't forecast sellouts.** On tours the models never saw, adding chart signals to a baseline of room size and market left test AUC at 0.587 on 2022-25 tours. On 2019 tours it went from 0.450 to 0.538, with a wide interval on the gain (-0.10 to +0.27). Raw sellout rates do rise with chart activity, but that pattern comes from bigger acts and later years, not from the charts themselves.
+- **The last tour matters when upsizing.** Doubling the room after a 100%-full tour multiplies the odds of a sellout by about 2.4. After a tour that was less than 92.9% full, upsizing lowers them (interaction p = 0.001). The result held when any single tour was left out and under a 97% sellout definition.
+- **A right-sizing flag a buyer can use.** 13 tours had at least half their shows upsized against that rule. Those 211 shows sold out 70.1% of the time, against 79.3% for other shows with a previous tour.
+- **Fill rate is hard to predict.** When a show doesn't sell out, no model beat simply predicting the training average.
+- **Ticket price leaks the outcome.** Same-show prices improve the model only because dynamic pricing reacts to demand, so the main models use the previous tour's price instead.
+
+## Tech Stack
+- Python 3.13: pandas, NumPy, SciPy, scikit-learn, statsmodels (logistic regression with artist-clustered standard errors)
+- SQLite with SQL views (CTEs, window functions) as the analysis layer
+- mwparserfromhell, lxml and the MediaWiki API for Wikipedia tour tables; pypdf and Tesseract OCR for the Pollstar validation PDFs
+- pytest (323 tests) and Jupyter notebooks for the walkthroughs
+- Power BI for the dashboard (in progress)
+
+## How to Run
+The raw data is not committed, so a full rebuild downloads everything. That takes a few hours, mostly the rate-limited Wikipedia and pageview downloads. Every download is cached, so later runs take minutes.
+
+1. Clone the repo and create an environment (Python 3.11 or newer):
+   ```bash
+   git clone https://github.com/msteines0312/concert-ticket-tracking.git
+   cd concert-ticket-tracking
+   python -m venv .venv
+   .venv\Scripts\activate          # macOS / Linux: source .venv/bin/activate
+   pip install -r requirements.txt
+   pip install -e .
+   ```
+2. For the Spotify sub-analysis, put a [Kaggle API token](https://www.kaggle.com/docs/api) in `~/.kaggle/`. Nothing else needs an account.
+3. Build the data in this order. Each step reads what the one before it saved.
+   ```bash
+   python -m concert_demand.ingest.wikipedia_tours --start-year 2015 --end-year 2025
+   python -m concert_demand.ingest.billboard_charts
+   python -m concert_demand.clean.artist_names
+   python -m concert_demand.ingest.spotify_charts
+   python -m concert_demand.ingest.pageviews
+   python -m concert_demand.clean.genres
+   python -m concert_demand.ingest.cpi
+   python -m concert_demand.load_db
+   python -m concert_demand.clean.production
+   python -m concert_demand.features.signals
+   python -m concert_demand.features.one_hit
+   python -m concert_demand.analysis_views
+   ```
+4. Fit the models and write the result tables to `reports/tables/` (about 4 minutes):
+   ```bash
+   python -m concert_demand.models
+   ```
+5. Export the dashboard tables to `data/dashboard/`:
+   ```bash
+   python -m concert_demand.dashboard
+   ```
+6. Run the tests with `pytest`, and open `notebooks/01_signal_exploration.ipynb` and `notebooks/02_models.ipynb` for the walkthroughs.
+
+The Pollstar validation (`python -m concert_demand.ingest.pollstar`) is optional. It downloads the year-end PDFs, and reading the scanned 2019 chart needs [Tesseract](https://github.com/UB-Mannheim/tesseract) installed.
+
+## Key Features
+- **Leakage-safe signals.** Every chart and pageview signal is measured as of 6 months before the show, roughly when it would be booked. A test floods everything after that date with fake hype and checks that no feature changes.
+- **Evaluation by tour, over time.** Models train on 2017-18 tours and are tested on 2019 and 2022-25 tours, so no tour appears on both sides. Artist-grouped cross-validation is a robustness check.
+- **Checked against an independent source.** Wikipedia ticket counts were matched to Pollstar's year-end charts, and 95% of 476 engagements agree within 1%.
+- **Two-part demand model.** 68% of shows sell out exactly, so the models predict the chance of a sellout and, separately, how full the room gets when it doesn't. A Tobit model checks the combined result.
+- **Real-world parsing.** The Wikipedia parser handles footnotes, leg totals, multi-night runs, European number formats and years hidden in table captions. Each bug found while checking the output has its own test.
+- **Decisions on the record.** [docs/ai_collaboration_log.md](docs/ai_collaboration_log.md) logs how the project was directed: what the AI proposed, what I decided, and where I overrode it.
+
+## Project Structure
+```
+src/concert_demand/
+  ingest/        download and parse each source (Wikipedia, Billboard, Spotify, pageviews, CPI, Pollstar)
+  clean/         attendance parsing, countries, artist names, genres, production labels
+  features/      as-of-booking chart and pageview signals, one-hit flags
+  models/        dataset, sellout and fill-rate models, robustness checks, right-sizing score
+  dashboard/     exports the tables the Power BI dashboard loads
+sql/             database schema and analysis views
+notebooks/       signal exploration and model walkthroughs
+reports/tables/  model results (CSV)
+data/labels/     hand-made production labels (committed)
+data/dashboard/  dashboard tables (committed)
+docs/            AI collaboration log, Wikipedia source list, design docs
+tests/           pytest suite
+```
 
 ## Data Sources and Licensing
-No data files are committed to this repo. Every dataset is downloaded and rebuilt by the ingest scripts, and each source keeps its own license. The MIT license, once added, will cover only the code.
+Raw and processed data are not committed. Every dataset is downloaded and rebuilt by the ingest scripts, and each source keeps its own license. The [MIT license](LICENSE) covers only the code. Two small sets of data files are committed:
+- `data/labels/`: production-level labels made by hand from Wikipedia articles (CC BY-SA 4.0).
+- `data/dashboard/`: the tables the Power BI dashboard loads, so it opens without rebuilding the pipeline. They hold Wikipedia-derived show data (CC BY-SA 4.0), Wikimedia pageview averages (CC0), and Billboard chart activity only as quarterly point totals. No weekly ranks, song titles or Pollstar data.
 
 | Source | What it provides | License / terms | How it's used here |
 |---|---|---|---|
@@ -15,7 +96,7 @@ No data files are committed to this repo. Every dataset is downloaded and rebuil
 ### Notes on attribution
 - **Wikipedia figures are secondhand.** Tour articles take their attendance and revenue numbers from Billboard Boxscore and Pollstar reports, which each article cites. Those outlets are the original source. Wikipedia is how the figures were compiled.
 - **Per-article credit.** The pipeline writes a source list, [docs/wikipedia_sources.csv](docs/wikipedia_sources.csv), naming every Wikipedia article used, with its URL and the revision that was read, so any figure can be traced back to its page. Wikipedia's [reuse guidelines](https://en.wikipedia.org/wiki/Wikipedia:Reusing_Wikipedia_content) accept a link to each reused page as attribution.
-- **Published outputs.** The Power BI dashboard and the written brief carry the same credits. The dashboard is shared as a `.pbit` template plus screenshots, because a `.pbix` file embeds its data. Data loaded into the dashboard comes only from Wikipedia and Wikimedia (CC BY-SA and CC0). Pollstar data stays out of it.
+- **Published outputs.** The Power BI dashboard and the written brief carry the same credits. The dashboard is shared as a `.pbit` template plus screenshots, because a `.pbix` file embeds its data. Data loaded into the dashboard comes from Wikipedia and Wikimedia (CC BY-SA and CC0), plus Billboard chart activity summed by quarter. Pollstar data stays out of it.
 
 ### Citations
 - Wikipedia contributors. "[year] concert tours" category articles. *Wikipedia, The Free Encyclopedia*. Retrieved October 2026. Per-article list: [docs/wikipedia_sources.csv](docs/wikipedia_sources.csv).
@@ -58,5 +139,8 @@ Data that hasn't been used yet will be added here when it is. That includes Poll
 - This is observational data. Results show which signals line up with demand, not what causes it.
 - Average ticket price is the price after dynamic pricing reacted to demand, so it partly reflects the outcome being predicted. It's only used in the model behind a test that checks for exactly that.
 
+## What I Learned
+<!-- Matt: write this in your own voice (1-2 sentences, per the README format). -->
+
 ## Status
-See [tasks/todo.md](tasks/todo.md) for progress. Full README (tech stack, how to run, key features, what I learned) will be written once the pipeline is complete.
+Phase 1 (data pipeline) and Phase 2 (models) are complete. Phase 3 is in progress: a Power BI dashboard for talent buyers and a written brief.
