@@ -36,8 +36,13 @@
 - [x] Flags instead of deletes: is_festival (27), suspect_capacity > 100K per show (34)
 - [x] Validation: 73% of tours with a page Total row match it within 0.5%. Mismatches checked
       by hand trace to the pages' own Total rows (subset totals, typos), not the parser
-- Result: 13,300 engagements, 437 tours, 245 artists. Model-ready (artist + date, no flags):
-  12,988 worldwide, 8,279 US + Canada (7,340 since pageviews start, Jul 2015), 69% sold out
+- [x] Two more parser bugs found while starting country tagging (each with tests):
+  - Plural headers ("Cities", "Countries") were dropped: Witness: The Tour had no city or country
+  - pandas 3 keeps NaN through astype(str), and NaN != NaN, so blank revenue or city broke the
+    row-to-row checks. 34 rows of copied leg totals survived (incl. BTS 180,000 across 14 US/CA
+    dates) and Witness had 13 multi-night runs double counted. Prism World Tour now has no usable rows
+- Result: 13,253 engagements, 436 tours. Model-ready (artist + date, no flags):
+  12,955 worldwide, 8,304 US + Canada, 68.8% sold out
 - [ ] Validate against Pollstar rows once that ingest exists (independent check)
 - [x] Ingest: Billboard Hot 100 + Billboard 200 CSVs, pinned to archive commit + tests
   - 976,949 entries: Hot 100 1958-2026, Billboard 200 1967-2026

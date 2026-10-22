@@ -49,10 +49,14 @@ YEAR_PATTERN = re.compile(r"\b(\d{4})\b")
 
 # Header keyword -> canonical column name. Checked with str.startswith on the
 # lowercased header, so "Dates (2018)" -> date and "Box Office" -> revenue.
+# "Cities" and "Countries" need their own keys because their plurals change
+# the spelling instead of just adding an "s".
 COLUMN_KEYWORDS = {
     "date": "date",
     "city": "city",
+    "cities": "city",
     "country": "country",
+    "countries": "country",
     "venue": "venue",
     "attendance": "attendance",
     "revenue": "revenue",
@@ -273,6 +277,30 @@ def clean_tour_table(table, tour, fallback_year=None):
     return shows.reset_index(drop=True)
 
 
+def _block_ids(frame, key_columns):
+    """Number runs of consecutive rows that share the same values in `key_columns`.
+
+    Two blank cells count as equal. This matters because pandas 3 keeps
+    missing values as NaN through `astype(str)`, and NaN never equals NaN,
+    so a plain comparison would start a new block at every blank revenue or
+    city and silently skip the run-merging and leg-total checks below.
+
+    Parameters
+    ----------
+    frame : pandas.DataFrame
+        Rows in table order.
+    key_columns : list of str
+        Columns that must all match the row above to continue a block.
+
+    Returns
+    -------
+    pandas.Series
+        An integer block id per row, increasing down the table.
+    """
+    keys = frame[key_columns].astype(object).fillna("<missing>").astype(str)
+    return (keys != keys.shift()).any(axis=1).cumsum()
+
+
 def _drop_figures_shared_across_venues(shows):
     """Drop rows whose attendance figure is one merged cell spanning several venues.
 
@@ -285,8 +313,7 @@ def _drop_figures_shared_across_venues(shows):
     revenue. Requiring identical revenue too keeps two separately reported
     sellouts that happen to share a capacity from being dropped.
     """
-    keys = shows[["tour", "attendance_raw", "revenue_usd"]].astype(str)
-    block_id = (keys != keys.shift()).any(axis=1).cumsum()
+    block_id = _block_ids(shows, ["tour", "attendance_raw", "revenue_usd"])
     venues_per_block = shows.groupby(block_id)["venue"].transform("nunique")
     return shows[venues_per_block <= 1].reset_index(drop=True)
 
@@ -314,11 +341,8 @@ def collapse_engagements(shows):
     shows = shows.dropna(subset=["tickets_sold", "capacity"]).reset_index(drop=True)
     shows = _drop_figures_shared_across_venues(shows)
 
-    key_columns = ["tour", "venue", "city", "attendance_raw"]
-    keys = shows[key_columns].astype(str)
     # A new engagement starts whenever the key differs from the row above
-    starts_new_run = (keys != keys.shift()).any(axis=1)
-    run_id = starts_new_run.cumsum()
+    run_id = _block_ids(shows, ["tour", "venue", "city", "attendance_raw"])
 
     engagements = (
         shows.groupby(run_id, sort=False)

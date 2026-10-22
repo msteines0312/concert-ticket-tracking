@@ -101,6 +101,14 @@ def test_standardize_columns_maps_variants_and_reads_header_year():
     assert {"date", "city", "country", "venue", "attendance", "revenue"} <= set(out.columns)
 
 
+def test_standardize_columns_maps_plural_headers():
+    # Witness: The Tour labels its columns "Cities" and "Countries", which
+    # don't start with the singular keyword the way "Dates" and "Venues" do.
+    df = pd.DataFrame(columns=["Dates", "Cities", "Countries", "Venues", "Attendance"])
+    out, _ = standardize_columns(df)
+    assert list(out.columns) == ["date", "city", "country", "venue", "attendance"]
+
+
 def test_standardize_columns_flattens_leg_header():
     # Billy Joel's table has a second header row naming the tour leg.
     cols = pd.MultiIndex.from_tuples([("Date", "North America"), ("Venue", "North America"),
@@ -269,6 +277,27 @@ def test_collapse_engagements_drops_figures_shared_across_venues():
     ])
     eng = collapse_engagements(shows)
     assert list(eng["venue"]) == ["Stadthalle"]
+
+
+def test_collapse_engagements_drops_shared_figures_without_revenue():
+    # The real Neverending World Tour page has no revenue column. A blank
+    # revenue must still count as "the same" from row to row.
+    shows = _shows([
+        ("O2 World", "266,000 / 266,000", None),
+        ("SAP Arena", "266,000 / 266,000", None),
+        ("Stadthalle", "8,000 / 9,000", None),
+    ])
+    assert list(collapse_engagements(shows)["venue"]) == ["Stadthalle"]
+
+
+def test_collapse_engagements_merges_runs_without_city():
+    # Witness: The Tour, Madison Square Garden: one two-night figure. A
+    # missing city must not split the run and count the figure twice.
+    shows = _shows([("Madison Square Garden", "21,688 / 22,667", 2.6e6)] * 2)
+    shows["city"] = None
+    eng = collapse_engagements(shows)
+    assert len(eng) == 1
+    assert eng.loc[0, "n_shows"] == 2
 
 
 def test_collapse_engagements_keeps_coincidentally_equal_sellouts():
