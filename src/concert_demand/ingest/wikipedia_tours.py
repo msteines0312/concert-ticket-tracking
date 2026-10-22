@@ -48,14 +48,16 @@ from concert_demand.clean.attendance import (
 from concert_demand.clean.countries import tag_countries
 from concert_demand.clean.covid import assign_covid_era
 from concert_demand.clean.shared_shows import merge_shared_shows
-from concert_demand.paths import INTERIM_DIR, RAW_DIR
+from concert_demand.paths import INTERIM_DIR, PROJECT_ROOT, RAW_DIR
 
 API_URL = "https://en.wikipedia.org/w/api.php"
 REST_HTML_URL = "https://en.wikipedia.org/w/rest.php/v1/page/{title}/html"
 ARTICLE_URL = "https://en.wikipedia.org/wiki/{title}"
 CACHE_DIR = RAW_DIR / "wikipedia_tours"
 OUTPUT_PATH = INTERIM_DIR / "wikipedia_engagements.csv"
-SOURCES_PATH = INTERIM_DIR / "wikipedia_sources.csv"
+# The source list is attribution metadata, not data: it lives in docs/ so it is
+# published with the repo (CC BY-SA asks for a link to every reused article)
+SOURCES_PATH = PROJECT_ROOT / "docs" / "wikipedia_sources.csv"
 REDIRECTS_PATH = INTERIM_DIR / "artist_redirects.csv"
 
 PROJECT_URL = "https://github.com/msteines0312/concert-ticket-tracking"

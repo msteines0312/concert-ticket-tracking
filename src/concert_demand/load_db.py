@@ -20,6 +20,7 @@ import sqlite3
 import pandas as pd
 
 from concert_demand.clean.artist_names import known_tour_artists
+from concert_demand.ingest.wikipedia_tours import SOURCES_PATH
 from concert_demand.paths import INTERIM_DIR, PROCESSED_DIR, PROJECT_ROOT
 
 SCHEMA_PATH = PROJECT_ROOT / "sql" / "schema.sql"
@@ -106,8 +107,8 @@ def check_counts(connection, expected):
             raise ValueError(f"{table}: loaded {loaded} rows, expected {count}")
 
 
-def run(db_path=DB_PATH, interim_dir=INTERIM_DIR):
-    """Rebuild the database from the interim CSVs.
+def run(db_path=DB_PATH, interim_dir=INTERIM_DIR, sources_path=SOURCES_PATH):
+    """Rebuild the database from the interim CSVs and the published source list.
 
     Returns
     -------
@@ -115,7 +116,7 @@ def run(db_path=DB_PATH, interim_dir=INTERIM_DIR):
         Path to the database file.
     """
     engagements = pd.read_csv(interim_dir / "wikipedia_engagements.csv")
-    sources = pd.read_csv(interim_dir / "wikipedia_sources.csv").rename(columns={"title": "tour"})
+    sources = pd.read_csv(sources_path).rename(columns={"title": "tour"})
     genres = pd.read_csv(interim_dir / "artist_genres.csv", usecols=["artist", "genre_group"])
     tables = {
         "artists": build_artists(engagements).merge(genres, on="artist", how="left"),

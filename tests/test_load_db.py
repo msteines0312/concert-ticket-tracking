@@ -57,7 +57,8 @@ def test_build_artists_includes_co_headliners():
 
 
 def test_run_loads_every_table_with_integer_flags(interim_dir, tmp_path):
-    db_path = run(db_path=tmp_path / "test.db", interim_dir=interim_dir)
+    db_path = run(db_path=tmp_path / "test.db", interim_dir=interim_dir,
+        sources_path=interim_dir / "wikipedia_sources.csv")
     with sqlite3.connect(db_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM engagements").fetchone()[0] == 3
         assert connection.execute("SELECT typeof(sold_out) FROM engagements").fetchone()[0] == "integer"
@@ -68,7 +69,8 @@ def test_run_loads_every_table_with_integer_flags(interim_dir, tmp_path):
 
 
 def test_model_ready_view_drops_flagged_and_non_us_rows(interim_dir, tmp_path):
-    db_path = run(db_path=tmp_path / "test.db", interim_dir=interim_dir)
+    db_path = run(db_path=tmp_path / "test.db", interim_dir=interim_dir,
+        sources_path=interim_dir / "wikipedia_sources.csv")
     with sqlite3.connect(db_path) as connection:
         dates = connection.execute("SELECT first_date FROM model_ready_engagements").fetchall()
     assert dates == [("2018-05-01",)]  # Germany and the festival row are excluded
@@ -79,13 +81,16 @@ def test_run_rejects_credits_for_unknown_artists(interim_dir, tmp_path):
     credits.to_csv(interim_dir / "chart_credits.csv", index=False)
     # pandas wraps the sqlite3 error in its own DatabaseError
     with pytest.raises(pd.errors.DatabaseError) as error:
-        run(db_path=tmp_path / "test.db", interim_dir=interim_dir)
+        run(db_path=tmp_path / "test.db", interim_dir=interim_dir,
+        sources_path=interim_dir / "wikipedia_sources.csv")
     assert isinstance(error.value.__cause__, sqlite3.IntegrityError)
 
 
 def test_run_rebuilds_instead_of_appending(interim_dir, tmp_path):
     db_path = tmp_path / "test.db"
-    run(db_path=db_path, interim_dir=interim_dir)
-    run(db_path=db_path, interim_dir=interim_dir)
+    run(db_path=db_path, interim_dir=interim_dir,
+        sources_path=interim_dir / "wikipedia_sources.csv")
+    run(db_path=db_path, interim_dir=interim_dir,
+        sources_path=interim_dir / "wikipedia_sources.csv")
     with sqlite3.connect(db_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM engagements").fetchone()[0] == 3
