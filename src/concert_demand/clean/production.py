@@ -36,9 +36,11 @@ import pandas as pd
 
 from concert_demand.ingest.wikipedia_tours import CACHE_DIR, _cache_path
 from concert_demand.load_db import DB_PATH
-from concert_demand.paths import INTERIM_DIR
+from concert_demand.paths import INTERIM_DIR, PROJECT_ROOT
 
 EVIDENCE_PATH = INTERIM_DIR / "production_evidence.csv"
+# Labels are hand-made judgments, committed to the repo (not rebuilt by a script)
+LABELS_PATH = PROJECT_ROOT / "data" / "labels" / "production_labels.csv"
 
 # "Set list", "Typical setlist", "Standard set list ", "Tour set list". Not
 # anchored to the end of the line: some headings carry trailing markup.
@@ -174,8 +176,30 @@ def model_sample_tours(db_path=DB_PATH):
             "SELECT DISTINCT tour FROM model_sample"))
 
 
+def save_tour_production(table, labels_path=LABELS_PATH, db_path=DB_PATH):
+    """Join set length to the production labels and write the tour_production table.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row per tour: production_level, label_confidence,
+        set_list_songs, set_list_suspect, has_production_section.
+    """
+    labels = pd.read_csv(labels_path).rename(columns={"confidence": "label_confidence"})
+    tours = labels[["tour", "production_level", "label_confidence"]].merge(
+        table[["tour", "set_list_songs", "set_list_suspect", "has_production_section"]],
+        on="tour", how="outer")
+    tours[["set_list_suspect", "has_production_section"]] = (
+        tours[["set_list_suspect", "has_production_section"]].fillna(False).astype(int))
+    with sqlite3.connect(db_path) as connection:
+        tours.to_sql("tour_production", connection, if_exists="replace", index=False)
+    logger.info("tour_production: %d tours, levels %s", len(tours),
+                tours["production_level"].value_counts().to_dict())
+    return tours
+
+
 def run(output_path=EVIDENCE_PATH):
-    """Write evidence and set length for every tour in the model sample."""
+    """Write evidence and set length for every tour in the model sample, then load them."""
     rows = []
     for tour in model_sample_tours():
         page = json.loads(_cache_path(tour, CACHE_DIR).read_text(encoding="utf-8"))
@@ -191,6 +215,7 @@ def run(output_path=EVIDENCE_PATH):
     table.to_csv(output_path, index=False)
     logger.info("%d tours: %d with a set list, %d with a production section",
                 len(table), table["set_list_songs"].notna().sum(), table["has_production_section"].sum())
+    save_tour_production(table)
     return table
 
 

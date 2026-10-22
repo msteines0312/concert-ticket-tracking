@@ -14,6 +14,7 @@ PRAGMA foreign_keys = ON;
 DROP TABLE IF EXISTS show_features;
 DROP TABLE IF EXISTS show_features_show_date;
 DROP TABLE IF EXISTS one_hit_shows;   -- written by concert_demand.features.one_hit
+DROP TABLE IF EXISTS tour_production; -- written by concert_demand.clean.production
 DROP VIEW IF EXISTS model_ready_engagements;
 DROP TABLE IF EXISTS spotify_credits;
 DROP TABLE IF EXISTS pageviews_daily;
