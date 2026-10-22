@@ -49,8 +49,8 @@ ANY_HEADING = re.compile(r"^(=+)[^=\n]+=+", re.MULTILINE)
 # tour-date tables in as production evidence.
 PRODUCTION_HEADING = re.compile(
     r"stage|production|staging|synopsis|\bshow\b|design|visual|concept", re.IGNORECASE)
-SKIP_HEADING = re.compile(r"cancel|postpon|date|box ?score|gross|personnel|set ?list|broadcast",
-                          re.IGNORECASE)
+SKIP_HEADING = re.compile(r"cancel|postpon|date|box ?score|gross|personnel|set ?list|broadcast"
+                          r"|\bshows\b|\bconcerts\b", re.IGNORECASE)
 # Terms that mark a sentence as describing the production, one per rubric
 # ingredient. "Opening act" is removed before matching so support acts
 # don't read as a show split into acts.
