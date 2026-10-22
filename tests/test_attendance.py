@@ -51,7 +51,7 @@ def test_parse_attendance_valid(raw, expected):
     assert parse_attendance(raw) == expected
 
 
-@pytest.mark.parametrize("raw", ["—N/a", "—", "N/A", "TBA", "", None, float("nan"), "4198613"])
+@pytest.mark.parametrize("raw", ["\u2014N/a", "\u2014", "N/A", "TBA", "", None, float("nan"), "4198613"])
 def test_parse_attendance_missing_or_unusable(raw):
     # A bare number with no capacity ("4198613") can't give a fill rate.
     assert parse_attendance(raw) == (None, None)
@@ -61,7 +61,7 @@ def test_parse_attendance_missing_or_unusable(raw):
     ("$1,733,194", 1733194.0),
     ("$208,648,942", 208648942.0),
     ("$224,718[e]", 224718.0),
-    ("—N/a", None),
+    ("\u2014N/a", None),
     ("£3,000,000", None),  # non-USD revenue is not converted, so it's dropped
     (None, None),
 ])
@@ -83,7 +83,7 @@ def test_parse_show_date(raw, header_year, expected):
 @pytest.mark.parametrize("raw, header_year", [
     ("February 23", None),  # no year anywhere, so the date is unknowable
     ("Total", 2024),
-    ("—N/a", 2024),
+    ("\u2014N/a", 2024),
 ])
 def test_parse_show_date_unparseable(raw, header_year):
     assert pd.isna(parse_show_date(raw, header_year))
@@ -160,9 +160,9 @@ def _raw_table():
         "City": ["Sydney", "Sydney", "Sydney", "Brisbane[b]", "Australia", "Perth", "Total"],
         "Country": ["Australia"] * 4 + ["Australia", "Australia", "Total"],
         "Venue": ["Qudos Bank Arena"] * 3 + ["Brisbane Ent. Centre", "Australia", "RAC Arena", "Total"],
-        "Attendance": ["64,096 / 64,096"] * 3 + ["9,800 / 11,000", "Australia", "—N/a",
+        "Attendance": ["64,096 / 64,096"] * 3 + ["9,800 / 11,000", "Australia", "\u2014N/a",
                                                  "87,896 / 89,096 (98.7%)"],
-        "Revenue": ["$7,197,262"] * 3 + ["$900,000", "Australia", "—N/a", "$8,097,262"],
+        "Revenue": ["$7,197,262"] * 3 + ["$900,000", "Australia", "\u2014N/a", "$8,097,262"],
     })
 
 
