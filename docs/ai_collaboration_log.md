@@ -245,3 +245,15 @@ I accepted the AI's recommendation on each of these after comparing the options:
 
 **Outcome.** Neither the two-part model nor the Tobit check beats predicting the average for every show, and the two agree, so the result doesn't depend on that modeling choice.
 
+## 34. Phase 2 results
+**Outcome.** The rest of Phase 2 was built in the order I approved, each step with tests and its own commit, and one command (`python -m concert_demand.models`) now rebuilds the whole stage and reproduces every table.
+
+- **Price and nights (my leakage tests):** on top of the previous tour's price, the same show's price adds about +0.036 AUC on 2022-25, and the number of nights about +0.034, both with intervals above zero. Both are set after sales start, which confirms my calls to keep them out of the main model.
+- **Part 2 and the combined model:** nothing beats predicting the average fill rate. The two-part model and the Tobit check agree.
+- **Charts vs. pageviews:** neither adds anything the other doesn't, and Spotify adds nothing on top.
+- **COVID:** no signal's effect changed after the shutdown.
+- **Robustness:** the results hold under my 97% sellout rule, English-only pageviews and the worldwide sample. Signals add nothing for artists the model hasn't seen. My 26-week window tied the 52-week one on the training years, so under my rule 52 weeks stays.
+- **Right-sizing:** the score follows my "upsizing risk" definition. Its first version also flagged downsizing after a sold-out tour as risky (Madonna moving from stadiums to theaters, 7 of 7 sold out), because the model fits one line through both directions. Since my definition is about growth, only growth is scored now. Shows upsized against the 95% rule sold out 73% of the time, against 80% for the rest; Halsey and Niall Horan top the list.
+
+The overall answer to the project question: chart and pageview signals measured at booking barely beat knowing the room, genre and country. What does carry information is the artist's catalog and how their last tour sold, especially for deciding whether to move up a room size. Next is my review of which parts of the analysis add noise.
+
