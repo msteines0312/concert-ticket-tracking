@@ -2,6 +2,7 @@ pandas>=2.2
 numpy>=1.26
 scipy>=1.13
 scikit-learn>=1.5
+statsmodels>=0.14  # logistic regression with artist-clustered standard errors
 matplotlib>=3.9
 requests>=2.32
 lxml>=5.2        # HTML parser behind pandas.read_html
