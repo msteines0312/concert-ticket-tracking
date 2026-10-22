@@ -52,6 +52,7 @@ TRAIN_END = pd.Timestamp("2019-01-01")   # tours starting before this train the 
 MIN_PREV_TOUR_SHOWS = 5                  # Matt: fewer finished shows is too noisy to use
 CHARTS = ["hot100", "billboard200"]
 PRICE_COLUMN = f"prev_tour_price_{BASE_YEAR}usd"
+SHOW_PRICE_COLUMN = f"show_price_{BASE_YEAR}usd"
 
 OUTPUT_PATH = PROCESSED_DIR / "model_dataset.csv"
 
@@ -230,7 +231,8 @@ def assign_split(shows):
 def load_inputs(connection):
     """Read the model sample (with genre, production and cutoff) and all engagements."""
     shows = pd.read_sql(
-        "SELECT s.*, f.cutoff_date, a.genre_group, p.production_level, "
+        "SELECT s.*, f.cutoff_date, f.spotify_lead_streams_52w, f.spotify_featured_streams_52w, "
+        "f.spotify_lead_viral_entries_52w, a.genre_group, p.production_level, "
         "p.set_list_songs, p.set_list_suspect "
         "FROM model_sample AS s "
         "JOIN show_features AS f USING (engagement_id) "
@@ -257,6 +259,10 @@ def build_model_dataset(shows, engagements, cpi_annual):
     # Matt's room-change idea: this room vs. the previous tour's typical
     # room. log2, so 1 = twice the size, -1 = half.
     dataset["log2_room_ratio"] = np.log2(dataset["capacity_per_show"] / dataset["prev_tour_room"])
+    # Same-show price, only for the leakage demo: it is revenue / tickets
+    # sold, so it is set partly by how the show sold (dynamic pricing).
+    show_revenue = to_constant_dollars(dataset["revenue_usd"], dataset["first_date"].dt.year, cpi_annual)
+    dataset[SHOW_PRICE_COLUMN] = show_revenue / dataset["tickets_sold"].where(dataset["tickets_sold"] > 0)
     dataset["split"] = assign_split(dataset)
     return dataset
 

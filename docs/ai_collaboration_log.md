@@ -232,3 +232,11 @@ I accepted the AI's recommendation on each of these after comparing the options:
 
 **Outcome.** The pattern holds. Of 117 refits, 115 ran; the other two failed for an unrelated reason (removing J. Cole's Off-Season Tour or Ricky Martin's Movimiento Tour leaves a year in which every remaining show sold out, so that year can't be fit), and they are reported rather than worked around. In all 115, upsizing still helps after a full tour and hurts after one that wasn't full. 114 stay statistically significant. The one exception is dropping Halsey's Love and Power Tour, the clearest case, which weakens it to p = 0.063 without changing the direction. The break-even stays between 93.5% and 98.2% full whichever tour is removed. So no single tour creates the pattern, but Halsey's tour is its strongest example and the brief should say so.
 
+## 32. The rest of Phase 2 in one batch
+**My call (pace).** I asked to finish Phase 2 in one push and then review the whole analysis for anything adding noise. The remaining design questions came as one batch; I accepted the AI's recommendation on each after comparing the options:
+
+- **Part 2 (fill rate when not sold out):** a fractional logit, which models the rate directly so predictions stay between 0 and 100%, scored by mean absolute error.
+- **COVID comparison:** one model on all shows where each signal gets a post-COVID interaction term, so a changed effect is tested directly instead of eyeballed across two models.
+- **Right-sizing score:** built from the room finding that survived the leave-one-out check (upsizing after a tour that wasn't nearly full), rather than from expected vs. actual fill or a model-recommended room size, which would lean on the confounded capacity effect.
+- **Spotify:** an extra block on top of charts and pageviews for shows inside the 2017-21 Spotify window.
+

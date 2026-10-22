@@ -84,7 +84,20 @@ def test_a_block_that_drives_the_outcome_raises_test_auc(monkeypatch):
 def test_room_interaction_is_zero_after_a_full_tour():
     data = pd.DataFrame({"hot100_lead_entries_career": [0, 0], "billboard200_lead_entries_career": [0, 0],
                          "prev_tour_price_2024usd": [100.0, 100.0], "log2_room_ratio": [1.0, 1.0],
-                         "prev_tour_fill_rate": [1.0, 0.9]})
+                         "prev_tour_fill_rate": [1.0, 0.9], "show_price_2024usd": [90.0, 90.0],
+                         "n_shows": [1, 1]})
     out = add_model_columns(data)
     # Doubling after a 100%-full tour: only the main effect applies.
     assert out["room_x_prev_unfilled"].tolist() == pytest.approx([0.0, 0.1])
+
+
+def test_shows_outside_the_spotify_window_leave_the_spotify_ladder():
+    data = pd.DataFrame({"hot100_lead_entries_career": [0, 0], "billboard200_lead_entries_career": [0, 0],
+                         "prev_tour_price_2024usd": [100.0, 100.0], "show_price_2024usd": [90.0, 90.0],
+                         "log2_room_ratio": [0.0, 0.0], "prev_tour_fill_rate": [1.0, 1.0],
+                         "n_shows": [1, 2], "spotify_lead_streams_52w": [5e6, np.nan],
+                         "spotify_featured_streams_52w": [0.0, np.nan],
+                         "spotify_lead_viral_entries_52w": [3, np.nan]})
+    out = add_model_columns(data)
+    assert out["log_spotify_lead_streams_52w"].isna().tolist() == [False, True]
+    assert out["log_n_shows"].tolist() == pytest.approx([0.0, np.log(2)])

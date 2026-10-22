@@ -42,7 +42,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from concert_demand.models.dataset import OUTPUT_PATH as DATASET_PATH
-from concert_demand.models.dataset import PRICE_COLUMN
+from concert_demand.models.dataset import PRICE_COLUMN, SHOW_PRICE_COLUMN
 from concert_demand.paths import PROJECT_ROOT
 
 OUTCOME = "sold_out"
@@ -67,6 +67,11 @@ BLOCKS = {
     "career": ["log_hot100_career_entries", "log_billboard200_career_entries"],
     "history": ["prev_tour_sellout_rate", "prev_tour_fill_rate", "log_prev_tour_price"],
     "room": ["log2_room_ratio", "room_x_prev_unfilled"],
+    # Only for the demos and sub-analyses below, never the main model.
+    "show_price": ["log_show_price"],
+    "spotify": ["log_spotify_lead_streams_52w", "log_spotify_featured_streams_52w",
+                "log_spotify_lead_viral_52w"],
+    "nights": ["log_n_shows"],
 }
 
 # Room terms stay in natural units in the explanatory model (per doubling of
@@ -78,6 +83,14 @@ LADDERS = {
     "charts_first": ["controls", "charts", "pageviews", "career"],
     "pageviews_first": ["controls", "pageviews", "charts", "career"],
     "history": ["controls", "history", "room", "charts", "pageviews", "career"],
+    # Price leakage demo (Matt): the main model already has the previous
+    # tour's price; this adds the same show's price on top. A big jump means
+    # same-show price carries the outcome, not information a buyer had.
+    "price_leakage": ["controls", "history", "show_price"],
+    # Spotify sub-analysis: shows whose 52-week window is inside 2017-21.
+    "spotify": ["controls", "charts", "pageviews", "spotify"],
+    # Nights leakage check: buyers add nights after early nights sell out.
+    "nights_leakage": ["controls", "charts", "pageviews", "career", "nights"],
 }
 
 # Explanatory fits: the full sample, and the history subset with room change.
@@ -105,6 +118,15 @@ def add_model_columns(dataset):
     out["log_hot100_career_entries"] = np.log1p(out["hot100_lead_entries_career"].fillna(0))
     out["log_billboard200_career_entries"] = np.log1p(out["billboard200_lead_entries_career"].fillna(0))
     out["log_prev_tour_price"] = np.log(out[PRICE_COLUMN])
+    out["log_show_price"] = np.log(out[SHOW_PRICE_COLUMN])
+    out["log_n_shows"] = np.log(out["n_shows"])
+    # Spotify columns are null outside 2017-21, so a show outside the window
+    # drops out of the Spotify ladder instead of reading as zero streams.
+    for column in ["spotify_lead_streams_52w", "spotify_featured_streams_52w"]:
+        if column in out:
+            out[f"log_{column}"] = np.log1p(out[column])
+    if "spotify_lead_viral_entries_52w" in out:
+        out["log_spotify_lead_viral_52w"] = np.log1p(out["spotify_lead_viral_entries_52w"])
     # Coded as the unfilled share (1 - fill), so log2_room_ratio's own
     # coefficient is the effect of upsizing after a tour that was 100% full,
     # and the interaction is how much worse upsizing gets per point of the
