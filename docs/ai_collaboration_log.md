@@ -122,3 +122,15 @@ I accepted the AI's recommendations on how to fix each one.
 **Redirected.** After I chose the signal timing and lookback windows, the AI built the Pollstar matching, the database, every feature definition and a first set of SQL analysis views, and explained its choices only after they were built. I stopped it and said again that I want to lead this project, with room to put my own spin on things, not just approve finished work.
 
 **Outcome.** The AI paused before committing the SQL views and listed every judgment call it had made on its own, eleven in all. Examples: how chart positions are scored, whether Spotify featured credits are kept separate from lead credits (adding them together contradicted my rule in entry 10), how co-headlined shows are handled, the venue size bands, and which questions the analysis views answer. All of them are open for me to change. The working rule from here: any choice with more than one reasonable answer comes to me before it's built, and only mechanical work goes ahead without asking. The decisions I make on that list will be logged as separate entries.
+
+## 20. Does the type of show matter? Production level as a new angle
+**My idea.** I asked whether the kind of show affects demand: a full production with dancers and choreography versus a fairly standard concert.
+
+**Research findings.** setlist.fm is off limits (its terms forbid storing data), but the cached Wikipedia tour articles describe many shows. Of the 242 tours in the model sample, 65% have a stage or production section and 90% have a set list. The AI flagged four problems: production is a tour-level trait (about 240 tours, not 5,800 shows), bigger tours get longer and more detailed articles, genre is mixed in (pop tours have dancers, rock tours mostly don't), and big productions get booked into stadiums.
+
+**Decision.** Of four options (keyword flags, labeling everything by hand, AI labeling with a hand check, set length), I chose to write the rubric myself, have Claude label each tour from its article text, and hand-check a random sample to measure agreement. Set length (songs per show) is added as its own number. The model will control for article length and genre so production level doesn't become a disguised popularity measure.
+
+## 21. One-hit wonders: do fresh hits get artists overbooked?
+**My idea.** I wanted recent chart runs studied as their own question: does a one-off hit lead tour managers to book an artist into rooms bigger than their real fan base can fill? I also cut day of week from the analysis, since it wasn't worth a view.
+
+**Outcome so far.** A quick check with a placeholder definition supports the idea. Shows by artists whose chart history is mostly from the past year were booked into rooms about 1.7 times bigger than their usual, and sold out less often than established artists who were also charting (69% vs. 77%). The placeholder also mislabels new solo careers (Harry Styles, Niall Horan) as breakouts, so I'm choosing the final definition of a one-hit artist myself.
