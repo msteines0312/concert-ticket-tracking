@@ -17,7 +17,7 @@ Date Facility/Promoter Support Capacity Gross
 05/22/19 Big Arena Opener Two 10,000
 Springfield, IL 100%
 2 shows Live Promoter 45.00 - 150.00
-09/17/19 | Solo Singer 1,800 — $300,000
+09/17/19 | Solo Singer 1,800 \u2014 $300,000
 Small Theater 2,000
 Testville, NY 90%
 Some Promoter 50.00 - 750.00
