@@ -109,10 +109,9 @@ Raw and processed data are not committed. Every dataset is downloaded and rebuil
 Data that hasn't been used yet will be added here when it is. That includes Pollstar files that aren't confirmed, and any later sources such as MusicBrainz.
 
 ## Limitations
-<!-- DRAFT for Matt to rewrite in his own voice. Numbers are current as of October 2026. -->
+**The biggest limitation: the sample favors big tours.** Only tours with a Wikipedia article and reported box office numbers are included, so the data leans toward large, successful acts, and 68% of shows sold out. Smaller acts might not follow the same patterns, so these results may not carry over to a buyer booking club-sized shows.
 
 **Which shows are in the data**
-- Only tours with a Wikipedia article and reported box office are included, which tilts the sample toward big, successful tours. Smaller acts and quiet tours are mostly missing.
 - Coverage thins out after 2019: 261 tours started in 2015-19, 109 in 2022-25.
 - The model sample is 5,806 US and Canada shows from December 2016 to April 2026. Earlier shows lack a full year of pageview history before their booking cutoff.
 - 18 shows are in Puerto Rico. They count as part of the US market, since Billboard's US charts cover it, but listening there is different (more Latin music), so they carry their own flag.
@@ -132,7 +131,7 @@ Data that hasn't been used yet will be added here when it is. That includes Poll
 - Only 5 model-ready US shows took place during the shutdown (March 2020 to August 2021), so the COVID analysis compares before and after, not during.
 
 **Production level and one-hit acts**
-- Production level is labeled from what each tour's Wikipedia article says. 149 of 240 articles don't describe the show at all, and the ones that do skew toward notable productions, so plain shows are underrepresented (11 labeled Standard). Labels were made with AI assistance and spot-checked by hand against the same evidence.
+- Production level is labeled from what each tour's Wikipedia article says. 149 of 240 articles don't describe the show at all, and the ones that do skew toward notable productions, so plain shows are underrepresented (11 labeled Standard). Labels were made with AI assistance from a rubric I wrote. A blind hand-check of 40 tours is still to come.
 - Only two acts meet the one-hit definition (Kim Petras and Tate McRae), so that analysis is a case study, not a model feature.
 
 **What the results can and can't say**
@@ -140,7 +139,7 @@ Data that hasn't been used yet will be added here when it is. That includes Poll
 - Average ticket price is the price after dynamic pricing reacted to demand, so it partly reflects the outcome being predicted. It's only used in the model behind a test that checks for exactly that.
 
 ## What I Learned
-<!-- Matt: write this in your own voice (1-2 sentences, per the README format). -->
+The biggest lesson was judging which features actually add signal and which only add noise, and testing that on the training data instead of keeping whatever scored best on the test set. I also learned to use AI as a tool rather than letting it run with everything: I made the design calls, and the [collaboration log](docs/ai_collaboration_log.md) records where I pushed back or changed course.
 
 ## Status
 Phase 1 (data pipeline) and Phase 2 (models) are complete. Phase 3 is in progress: a Power BI dashboard for talent buyers and a written brief.
