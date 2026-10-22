@@ -117,3 +117,8 @@ I accepted the AI's recommendations on how to fix each one.
 **My call.** Partway through this phase I asked for the task list to be checked off as each item finishes, and for this log to be updated from the session transcript after every two completed tasks, instead of in one pass at the end.
 
 **Outcome.** Entries 16 to 18 are the first update made on that schedule. The same session's Pollstar validation found that Wikipedia labels some near-sellouts (96 to 99% sold in Pollstar) as sold out. That raises a question about how "sold out" should be defined, which I still need to decide before modeling.
+
+## 19. Taking back the design decisions
+**Redirected.** After I chose the signal timing and lookback windows, the AI built the Pollstar matching, the database, every feature definition and a first set of SQL analysis views, and explained its choices only after they were built. I stopped it and said again that I want to lead this project, with room to put my own spin on things, not just approve finished work.
+
+**Outcome.** The AI paused before committing the SQL views and listed every judgment call it had made on its own, eleven in all. Examples: how chart positions are scored, whether Spotify featured credits are kept separate from lead credits (adding them together contradicted my rule in entry 10), how co-headlined shows are handled, the venue size bands, and which questions the analysis views answer. All of them are open for me to change. The working rule from here: any choice with more than one reasonable answer comes to me before it's built, and only mechanical work goes ahead without asking. The decisions I make on that list will be logged as separate entries.
