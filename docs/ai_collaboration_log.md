@@ -145,3 +145,22 @@ I accepted the AI's recommendations on how to fix each one.
 **My call (rituals).** I had raised concert rituals as an angle (Role Model's "Sally" moment and similar fan traditions). After looking at the problems (rituals often become famous partway through a tour, they mostly belong to superstars who already sell out, and only 15 to 30 tours would qualify) I decided to drop it: it would add more noise than signal.
 
 **Outcome.** Genre groups come from each artist's Wikipedia infobox. Every listed genre is mapped to a group and the artist gets the majority, because infoboxes don't list genres in order of importance. The first version had two bugs, found by reviewing the output: citation links inside the genre field were read as genres ("AllMusic", "Rolling Stone"), and unmatched labels outvoted real ones (Lady Gaga came out as "Other"). Both are fixed and tested. The final split across 255 artists: Rock/Alternative 85, Pop 61, R&B/Hip-Hop 53, Country 22, Latin 21, Dance/Electronic 10, Other 2. The 57 ties are broken by the first-listed genre and flagged for my review.
+
+## 23. Clearing the open decisions in one pass
+**My call (format).** With 15 design questions open, I asked for a simple selection list so I could go through them quickly. Most choices below accept the AI's recommendation after I compared the options. The ones where I chose something else are marked.
+
+- **Sellout definition (accepted):** exactly 100% sold stays the main outcome, and the Pollstar-based 97% threshold becomes a robustness check.
+- **Production tiers (my pick):** Standard is a band with instruments and lights in a smaller venue; Enhanced includes dancing; the top tier is a themed show built around a story or eras (like the Eras Tour or Renaissance). I chose this over a count of big production elements.
+- **Genre ties (accepted):** the 57 tie-broken genre assignments stand.
+- **2019 Pollstar (accepted):** OCR the scanned PDF so validation also covers pre-COVID shows.
+- **One-hit definition (accepted):** under 3,000 daily pageviews before the song charted, and album support measured over the whole career, so established artists between albums aren't flagged.
+- **Chart scoring (accepted):** keep linear points and add a separate count of top-10 weeks.
+- **Spotify (accepted):** split lead and featured streams, in line with my rule in entry 10.
+- **Co-headliners (accepted):** use the stronger act's signal.
+- **Momentum (accepted):** keep pageview momentum and add chart momentum, which ties into my one-hit question.
+- **Ticket price (my variant):** the AI recommended keeping average ticket price out of the model, because it's the price after dynamic pricing reacted to demand. I chose to include it, but only behind a test: compare the model with and without price, and if price inflates accuracy enough to suggest it's leaking the outcome, fall back to descriptive use only.
+- **Model framing (accepted):** build both the two-part sellout model and a demand model (tickets per show compared to capacity), and compare them.
+- **Analysis views (my pick):** right-sizing, booking history and signal diagnostics. I left out the COVID and seasonality views; the COVID comparison from entry 15 stays in Phase 2.
+- **Notebook (accepted):** save the exploration as a cleaned notebook.
+- **README limitations (my pick):** the AI drafts, I edit it into my own voice.
+- **Pollstar matching (accepted):** keep the validated rule.
