@@ -20,7 +20,10 @@ Signals per window
   #1 earns chart_size points and the last position earns 1. Points reward
   ranking high, not just being on the chart.
 - Billboard best rank, any role.
-- Wikipedia pageviews: mean daily views (current title + former names).
+- Wikipedia pageviews: mean daily views, English + Spanish Wikipedia
+  (current title + former names on each). English alone undercounted Latin
+  artists, whose fans often read the Spanish article. An English-only
+  52-week version is kept for robustness checks.
 - Spotify US + Canada (2017-2021 sub-analysis): Top 200 streams and Viral 50
   entries, lead and featured credits together (a feature earns the song's
   full streams). Null when the window isn't fully inside the Spotify data.
@@ -157,13 +160,17 @@ def pageview_signals(shows, pageviews):
     """
     pageviews = pageviews.sort_values("date")
     dates = pageviews["date"].to_numpy()
-    views = pageviews["views_total"].to_numpy()
-    features = {}
-    for weeks in WINDOW_WEEKS:
+    english = pageviews["views_total"].to_numpy()
+    both = english + pageviews["views_es"].to_numpy()
+
+    def mean_daily(views, weeks):
         starts, ends = _windows(shows["cutoff"], weeks)
         mean_views = window_sums(dates, views, starts, ends) / (weeks * 7)
         mean_views[starts < np.datetime64(PAGEVIEWS_START)] = np.nan
-        features[f"pageviews_mean_{weeks}w"] = mean_views
+        return mean_views
+
+    features = {f"pageviews_mean_{weeks}w": mean_daily(both, weeks) for weeks in WINDOW_WEEKS}
+    features["pageviews_en_mean_52w"] = mean_daily(english, 52)
     features = pd.DataFrame(features, index=shows.index)
     # Momentum: log ratio of recent to longer-run attention. 0 = steady,
     # positive = rising. The +1 keeps artists with zero views defined.
@@ -253,7 +260,7 @@ def load_inputs(connection):
         parse_dates=["first_date"])
     credits = pd.read_sql("SELECT artist, chart, chart_week, rank, role FROM chart_credits",
                           connection, parse_dates=["chart_week"])
-    pageviews = pd.read_sql("SELECT artist, date, views_total FROM pageviews_daily",
+    pageviews = pd.read_sql("SELECT artist, date, views_total, views_es FROM pageviews_daily",
                             connection, parse_dates=["date"])
     spotify = pd.read_sql("SELECT artist, chart, date, streams FROM spotify_credits "
                           "WHERE region IN ('United States', 'Canada')", connection,

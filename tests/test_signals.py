@@ -31,9 +31,9 @@ def _credit(week, rank=1, chart="hot100", role="lead", artist="Artist A"):
     return {"artist": artist, "chart": chart, "chart_week": pd.Timestamp(week), "rank": rank, "role": role}
 
 
-def _pageviews(start, end, views=10, artist="Artist A"):
+def _pageviews(start, end, views=10, views_es=0, artist="Artist A"):
     days = pd.date_range(start, end)
-    return pd.DataFrame({"artist": artist, "date": days, "views_total": views})
+    return pd.DataFrame({"artist": artist, "date": days, "views_total": views, "views_es": views_es})
 
 
 def _spotify(day, streams=1000, chart="top200", artist="Artist A"):
@@ -76,7 +76,8 @@ def test_signals_ignore_everything_on_or_after_the_cutoff(inputs):
     leaked = build_features(
         shows,
         pd.concat([credits, future_credits], ignore_index=True),
-        pageviews.assign(views_total=np.where(pageviews["date"] >= CUTOFF, 10**6, 10)),
+        pageviews.assign(views_total=np.where(pageviews["date"] >= CUTOFF, 10**6, 10),
+                         views_es=np.where(pageviews["date"] >= CUTOFF, 10**6, 0)),
         pd.concat([spotify, future_spotify], ignore_index=True),
     )
     pd.testing.assert_frame_equal(baseline, leaked)
@@ -121,3 +122,11 @@ def test_spotify_is_null_when_window_starts_before_the_data(inputs):
     features = build_features(early, credits, pageviews, spotify).iloc[0]
     assert features["spotify_streams_13w"] == 0
     assert np.isnan(features["spotify_streams_52w"])
+
+
+def test_pageviews_add_spanish_views_and_keep_an_english_only_version(inputs):
+    shows, credits, _, spotify = inputs
+    pageviews = _pageviews("2015-07-01", "2019-12-31", views=10, views_es=30)
+    features = build_features(shows, credits, pageviews, spotify).iloc[0]
+    assert features["pageviews_mean_52w"] == pytest.approx(40)
+    assert features["pageviews_en_mean_52w"] == pytest.approx(10)

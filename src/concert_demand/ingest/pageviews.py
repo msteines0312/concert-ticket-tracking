@@ -16,6 +16,14 @@ adding their history would put an artificial jump in the series on the
 day of the merge. They're excluded. The current-title-only count is kept
 as a separate column for robustness checks.
 
+Spanish Wikipedia is counted too, in a separate column (views_es). Fans of
+Latin artists often read the Spanish article, so English views alone made
+artists like J Balvin and Aventura look far less popular than they were.
+Each artist's Spanish article is found through the interlanguage link on
+their English page, and its redirects are added the same way. It's done for
+every artist, not just Latin ones, so no one has to decide who counts as
+"Latin".
+
 Pageview data is released under CC0 by the Wikimedia Foundation. Only
 human readers are counted (agent=user), which excludes bots and crawlers.
 
@@ -39,10 +47,15 @@ from concert_demand.ingest import wikipedia_tours
 from concert_demand.paths import INTERIM_DIR, RAW_DIR
 
 API_URL = ("https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/"
-           "en.wikipedia.org/all-access/user/{title}/daily/{start}/{end}")
+           "{project}/all-access/user/{title}/daily/{start}/{end}")
+ENGLISH = "en.wikipedia.org"
+SPANISH = "es.wikipedia.org"
+SPANISH_ACTION_API = "https://es.wikipedia.org/w/api.php"
 FIRST_DAY = date(2015, 7, 1)  # earliest date the pageviews API has data for
 
 CACHE_DIR = RAW_DIR / "pageviews"
+SPANISH_CACHE_DIR = RAW_DIR / "pageviews_es"
+SPANISH_TITLES_PATH = INTERIM_DIR / "spanish_titles.csv"
 ENGAGEMENTS_PATH = INTERIM_DIR / "wikipedia_engagements.csv"
 REDIRECTS_PATH = INTERIM_DIR / "artist_redirects.csv"
 OUTPUT_PATH = INTERIM_DIR / "pageviews_daily.csv"
@@ -53,22 +66,30 @@ WORK_TITLE_PATTERN = re.compile(
     r"|\((?:[^)]*\s)?(?:album|EP|song|single|mixtape|tour|film|documentary|TV series|book)\)",
     re.IGNORECASE,
 )
+# The same rule for Spanish titles: "Discografía de Shakira", "Anexo:Giras de U2", "(álbum)"
+SPANISH_WORK_TITLE_PATTERN = re.compile(
+    r"discograf[ií]a|videograf[ií]a|filmograf[ií]a|^Anexo:"
+    r"|\((?:[^)]*\s)?(?:[áa]lbum|EP|canci[óo]n|sencillo|mixtape|gira|pel[íi]cula|documental|serie|libro)\)",
+    re.IGNORECASE,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def is_work_title(title):
+def is_work_title(title, pattern=WORK_TITLE_PATTERN):
     """True if a redirect title names a work or list rather than the artist.
 
     Parameters
     ----------
     title : str
+    pattern : re.Pattern
+        WORK_TITLE_PATTERN for English titles, SPANISH_WORK_TITLE_PATTERN for Spanish.
 
     Returns
     -------
     bool
     """
-    return bool(WORK_TITLE_PATTERN.search(title))
+    return bool(pattern.search(title))
 
 
 def _cache_path(title, cache_dir):
@@ -101,7 +122,7 @@ def parse_views(payload):
     return pd.Series([item["views"] for item in items], index=dates, dtype="int64")
 
 
-def fetch_daily_views(session, title, cache_dir=CACHE_DIR, end=None):
+def fetch_daily_views(session, title, cache_dir=CACHE_DIR, end=None, project=ENGLISH):
     """Daily human pageviews for one title, from cache when available.
 
     Parameters
@@ -109,8 +130,11 @@ def fetch_daily_views(session, title, cache_dir=CACHE_DIR, end=None):
     session : requests.Session
     title : str
     cache_dir : pathlib.Path
+        One directory per wiki, since the same title ("Bad Bunny") exists on both.
     end : datetime.date, optional
         Last day to request. Defaults to yesterday.
+    project : str
+        ENGLISH or SPANISH.
 
     Returns
     -------
@@ -122,7 +146,7 @@ def fetch_daily_views(session, title, cache_dir=CACHE_DIR, end=None):
         return parse_views(json.loads(path.read_text(encoding="utf-8")))
 
     end = end or date.today() - timedelta(days=1)
-    url = API_URL.format(title=quote(title.replace(" ", "_"), safe=""),
+    url = API_URL.format(project=project, title=quote(title.replace(" ", "_"), safe=""),
                          start=FIRST_DAY.strftime("%Y%m%d"), end=end.strftime("%Y%m%d"))
     try:
         payload = wikipedia_tours.get_with_retry(session, url).json()
@@ -169,6 +193,62 @@ def combine_artist_views(artist, canonical_views, redirect_views, days=None):
     })
 
 
+def fetch_spanish_titles(session, artists):
+    """Find each artist's Spanish Wikipedia article via interlanguage links.
+
+    Parameters
+    ----------
+    session : requests.Session
+    artists : list of str
+        English Wikipedia titles.
+
+    Returns
+    -------
+    dict
+        English title -> Spanish title. Artists without a Spanish article are omitted.
+    """
+    spanish = {}
+    batch_size = wikipedia_tours.WIKITEXT_BATCH_SIZE
+    for start in range(0, len(artists), batch_size):
+        params = {"action": "query", "prop": "langlinks", "lllang": "es", "lllimit": "max",
+                  "titles": "|".join(artists[start:start + batch_size]),
+                  "format": "json", "formatversion": 2}
+        while True:
+            payload = wikipedia_tours.get_json(session, params)
+            for page in payload["query"]["pages"]:
+                for link in page.get("langlinks", []):
+                    spanish[page["title"]] = link["title"]
+            if "continue" not in payload:
+                break
+            params.update(payload["continue"])
+    return spanish
+
+
+def spanish_views(session, spanish_title, spanish_redirects, days):
+    """Daily Spanish Wikipedia views for one artist: article plus name redirects.
+
+    Parameters
+    ----------
+    session : requests.Session
+    spanish_title : str or None
+        None when the artist has no Spanish article.
+    spanish_redirects : list of str
+    days : pandas.DatetimeIndex
+
+    Returns
+    -------
+    pandas.Series
+        Views on every day in `days`, all zero when there's no Spanish article.
+    """
+    if spanish_title is None:
+        return pd.Series(0, index=days, dtype="int64")
+    titles = [spanish_title] + [title for title in spanish_redirects
+                                if not is_work_title(title, SPANISH_WORK_TITLE_PATTERN)]
+    series = [fetch_daily_views(session, title, SPANISH_CACHE_DIR, project=SPANISH)
+              for title in titles]
+    return sum(s.reindex(days, fill_value=0) for s in series).astype("int64")
+
+
 def tour_artists(engagements):
     """Headliners and co-headliners, excluding package tours (brands, not artists)."""
     engagements = engagements[~engagements["is_package_tour"]]
@@ -191,13 +271,24 @@ def run(output_path=OUTPUT_PATH):
     total_titles = len(artists) + sum(len(redirects.get(a, [])) for a in artists)
     logger.info("%d artists, %d titles including redirects", len(artists), total_titles)
 
+    spanish_titles = fetch_spanish_titles(session, artists)
+    spanish_redirects = wikipedia_tours.fetch_redirects(
+        session, sorted(set(spanish_titles.values())), api_url=SPANISH_ACTION_API)
+    pd.DataFrame({"artist": list(spanish_titles), "spanish_title": list(spanish_titles.values())}
+                 ).to_csv(SPANISH_TITLES_PATH, index=False)
+    logger.info("%d of %d artists have a Spanish article", len(spanish_titles), len(artists))
+
     frames, fetched = [], 0
     for artist in artists:
         canonical = fetch_daily_views(session, artist)
         redirect_series = [fetch_daily_views(session, r) for r in redirects.get(artist, [])]
-        frames.append(combine_artist_views(artist, canonical, redirect_series, days=days))
+        combined = combine_artist_views(artist, canonical, redirect_series, days=days)
+        spanish_title = spanish_titles.get(artist)
+        combined["views_es"] = spanish_views(
+            session, spanish_title, spanish_redirects.get(spanish_title, []), days).to_numpy()
+        frames.append(combined)
         fetched += 1 + len(redirect_series)
-        logger.info("%d / %d titles", fetched, total_titles)
+        logger.info("%d / %d English titles (+ Spanish)", fetched, total_titles)
 
     daily = pd.concat(frames, ignore_index=True)
     output_path.parent.mkdir(parents=True, exist_ok=True)

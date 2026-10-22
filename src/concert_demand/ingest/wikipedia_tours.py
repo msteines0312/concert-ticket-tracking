@@ -136,9 +136,9 @@ def get_with_retry(session, url, params=None):
     response.raise_for_status()  # out of retries: surface the last error
 
 
-def get_json(session, params):
-    """Call the MediaWiki Action API and return the parsed JSON."""
-    return get_with_retry(session, API_URL, params).json()
+def get_json(session, params, api_url=API_URL):
+    """Call the MediaWiki Action API (English Wikipedia by default) and return the parsed JSON."""
+    return get_with_retry(session, api_url, params).json()
 
 
 def fetch_category_titles(session, year):
@@ -253,7 +253,7 @@ def resolve_titles(session, names, overrides=TITLE_OVERRIDES):
     return resolved
 
 
-def fetch_redirects(session, titles):
+def fetch_redirects(session, titles, api_url=API_URL):
     """List the redirect titles that point at each artist page.
 
     When an artist changes their name, Wikipedia keeps the old name as a
@@ -265,6 +265,9 @@ def fetch_redirects(session, titles):
     session : requests.Session
     titles : list of str
         Canonical artist titles.
+    api_url : str
+        Action API of the wiki to query. Spanish Wikipedia's is used for
+        Spanish pageviews.
 
     Returns
     -------
@@ -279,7 +282,7 @@ def fetch_redirects(session, titles):
             "format": "json", "formatversion": 2,
         }
         while True:
-            payload = get_json(session, params)
+            payload = get_json(session, params, api_url)
             for page in payload["query"]["pages"]:
                 for redirect in page.get("redirects", []):
                     redirects.setdefault(page["title"], []).append(redirect["title"])

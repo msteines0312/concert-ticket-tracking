@@ -126,3 +126,42 @@ def test_is_work_title_catches_pages_about_works_and_lists(title):
 ])
 def test_is_work_title_keeps_former_names(title):
     assert not is_work_title(title)
+
+
+# ---------------------------------------------------------------------------
+# Spanish Wikipedia
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("title, is_work", [
+    ("Discografía de Shakira", True),
+    ("Anexo:Giras musicales de U2", True),
+    ("Despacito (canción)", True),
+    ("Un verano sin ti (álbum)", True),
+    ("Conejo Malo", False),                       # Bad Bunny nickname: a real alternate name
+    ("Benito Antonio Martínez Ocasio", False),    # legal name
+])
+def test_spanish_work_titles_are_excluded(title, is_work):
+    assert is_work_title(title, pageviews.SPANISH_WORK_TITLE_PATTERN) == is_work
+
+
+def test_fetch_daily_views_queries_the_requested_wiki(tmp_path):
+    session = FakeSession([FakeResponse(200, _payload([]))])
+    fetch_daily_views(session, "Bad Bunny", cache_dir=tmp_path, project=pageviews.SPANISH)
+    assert "/es.wikipedia.org/" in session.urls[0]
+
+
+def test_spanish_views_adds_redirects_and_skips_work_pages(tmp_path, monkeypatch):
+    monkeypatch.setattr(pageviews, "SPANISH_CACHE_DIR", tmp_path)
+    session = FakeSession([FakeResponse(200, _payload([("2020-01-01", 100)])),   # article
+                           FakeResponse(200, _payload([("2020-01-01", 7)]))])    # name redirect
+    days = pd.date_range("2020-01-01", "2020-01-02")
+    views = pageviews.spanish_views(session, "Bad Bunny",
+                                    ["Conejo Malo", "Discografía de Bad Bunny"], days)
+    assert views.tolist() == [107, 0]
+    assert len(session.urls) == 2  # the discography page is never requested
+
+
+def test_spanish_views_are_zero_without_a_spanish_article():
+    days = pd.date_range("2020-01-01", "2020-01-03")
+    views = pageviews.spanish_views(FakeSession([]), None, [], days)
+    assert views.tolist() == [0, 0, 0]
