@@ -240,3 +240,8 @@ I accepted the AI's recommendation on each of these after comparing the options:
 - **Right-sizing score:** built from the room finding that survived the leave-one-out check (upsizing after a tour that wasn't nearly full), rather than from expected vs. actual fill or a model-recommended room size, which would lean on the confounded capacity effect.
 - **Spotify:** an extra block on top of charts and pageviews for shows inside the 2017-21 Spotify window.
 
+## 33. Correcting the score for expected fill
+**AI correction.** The AI planned to score the combined expected fill rate by mean absolute error. Checking the baselines showed that was wrong for this outcome: predicting 100% full for every show scored 2.4 to 2.9 points, far better than any model (6.5 to 7.3), while saying nothing. Absolute error rewards predicting the median, and the median show sold out. Expected fill is an average, and squared error (RMSE) rewards getting averages right; on RMSE, "always 100%" is no better than the mean. The combined model is now scored by RMSE, with MAE kept in the table and "always 100%" shown as a baseline. Part 2 keeps MAE as I chose, since shows that didn't sell out don't bunch at a single value.
+
+**Outcome.** Neither the two-part model nor the Tobit check beats predicting the average for every show, and the two agree, so the result doesn't depend on that modeling choice.
+

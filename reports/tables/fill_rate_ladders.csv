@@ -1,4 +1,4 @@
-ladder,test_split,step,added_block,test_shows,test_tours,mae_pts,mae_low,mae_high,change_low,change_high,mae_change_pts
+ladder,test_split,step,added_block,test_shows,test_tours,mae_pts,score_low,score_high,change_low,change_high,mae_change_pts
 charts_first,test_2019,mean_only,mean_only,152,20,11.157396638327203,9.038680309129063,12.926971361418655,,,
 charts_first,test_2019,controls,controls,152,20,11.91836143657911,9.046220972619384,14.500107587803068,-1.135594499189346,3.5918787656635454,0.7609647982519068
 charts_first,test_2019,controls+charts,charts,152,20,13.704929544328953,10.53324920727102,16.536971747426847,0.435711707250101,3.526752370204149,1.7865681077498436

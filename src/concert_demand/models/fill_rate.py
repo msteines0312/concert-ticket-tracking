@@ -68,23 +68,40 @@ def predict_fill(X_train, y_train, X_test):
     return np.asarray(fit.predict(sm.add_constant(X_test, has_constant="add")))
 
 
-def tour_bootstrap_mae(y_true, predictions, tours, n_boot=sellout.N_BOOTSTRAP, seed=sellout.SEED):
-    """95% intervals for each step's MAE and its change from the step before (paired by tour)."""
+def mean_absolute_error(errors):
+    """MAE of an error array."""
+    return np.mean(np.abs(errors))
+
+
+def tour_bootstrap_mae(y_true, predictions, tours, n_boot=sellout.N_BOOTSTRAP, seed=sellout.SEED,
+                       metric=mean_absolute_error):
+    """95% intervals for each step's error score and its change from the step before.
+
+    Tours are resampled and every step is scored on the same resample, so
+    changes are paired. `metric` turns an array of errors into one score
+    (MAE by default; expected_fill passes RMSE).
+
+    Returns
+    -------
+    list of dict
+        Per step: score_low, score_high, and for later steps change_low,
+        change_high.
+    """
     rng = np.random.default_rng(seed)
     unique_tours = np.unique(tours)
     rows_by_tour = {tour: np.flatnonzero(tours == tour) for tour in unique_tours}
     steps = list(predictions)
-    maes = {step: [] for step in steps}
+    scores = {step: [] for step in steps}
     for _ in range(n_boot):
         rows = np.concatenate([rows_by_tour[t] for t in rng.choice(unique_tours, len(unique_tours))])
         for step in steps:
-            maes[step].append(np.mean(np.abs(y_true[rows] - predictions[step][rows])))
+            scores[step].append(metric(y_true[rows] - predictions[step][rows]))
     out = []
     for i, step in enumerate(steps):
-        mae = np.array(maes[step])
-        row = {"mae_low": np.percentile(mae, 2.5), "mae_high": np.percentile(mae, 97.5)}
+        score = np.array(scores[step])
+        row = {"score_low": np.percentile(score, 2.5), "score_high": np.percentile(score, 97.5)}
         if i > 0:
-            change = mae - np.array(maes[steps[i - 1]])
+            change = score - np.array(scores[steps[i - 1]])
             row.update(change_low=np.percentile(change, 2.5), change_high=np.percentile(change, 97.5))
         out.append(row)
     return out
