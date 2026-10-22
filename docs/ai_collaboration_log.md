@@ -164,3 +164,10 @@ I accepted the AI's recommendations on how to fix each one.
 - **Notebook (accepted):** save the exploration as a cleaned notebook.
 - **README limitations (my pick):** the AI drafts, I edit it into my own voice.
 - **Pollstar matching (accepted):** keep the validated rule.
+
+## 24. Results of the decision batch
+**My call (logistics).** For production labels, I chose to have Claude label the tours in the working session rather than through an API script, and had it install the OCR tool for the 2019 Pollstar PDF.
+
+**One-hit result.** My full definition (one song at least 70% of recent chart points, under 3,000 daily pageviews before the song, weak album support over the whole career) is much stricter than the first rough version. It flags two acts: Kim Petras ("Unholy"), 12 shows with no sellouts and 42% of seats filled, and Tate McRae ("Greedy"), 15 shows, all sold out. My two refinements removed the false positives: Spanish pageviews cleared J Balvin, and counting the whole album career cleared Brad Paisley. Two acts with nearly the same profile at booking, opposite outcomes: the case study for the brief.
+
+**Co-headliner edge case.** Using the stronger act's signals, 140 co-headlined shows switch to the other act, mostly as expected (Journey and Mötley Crüe for Def Leppard). One looks wrong at first: the Aubrey & the Three Migos tour uses Migos' signals instead of Drake's, because Migos really did draw more Wikipedia traffic in the year before the cutoff (15,400 vs. 13,100 views a day). The rule worked as designed, but it shows that pageviews measure attention at a point in time, not the size of a fan base. I'm keeping the rule and noting the limitation.
