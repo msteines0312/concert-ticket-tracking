@@ -277,3 +277,8 @@ The overall answer to the project question: chart and pageview signals measured 
 - **Spotify and Part 2 (accepted):** both kept and reported as clean negative results rather than cut or tuned.
 - **Momentum:** dropping it made predictions worse (30% of folds better), so it stays.
 
+## 37. Keeping the noise review after seeing the test results
+**What happened.** Rerun with the noise-review changes, the full model scored slightly lower on the held-out tours (0.556 to 0.522 on 2019, 0.624 to 0.600 on 2022-25), well inside the noise. The production block, which looked best in training cross-validation (+0.051), lost accuracy on both test sets (about -0.03), and "described or not" alone did no better, so it doesn't generalize. The room finding got stronger: with separate terms for growing and shrinking, doubling the room after a full tour multiplies the odds of a sellout by 2.4, the break-even is 92.9% full (91.1% to 94.7% when any one tour is left out), and the right-sizing flag now separates 193 upsized shows that sold out 67% of the time from the rest at 80%.
+
+**My call (accepted).** The AI recommended keeping the changes and reporting both versions; I agreed. Reverting because the test scores dipped would mean picking the model by its test score, and then the test sets would no longer be a fair check. The before and after numbers are both in the notebook, so the comparison is public.
+
