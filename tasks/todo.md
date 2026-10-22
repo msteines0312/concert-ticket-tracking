@@ -51,7 +51,12 @@
     100 of 200 entries since 2026-09-26 (archive scraper, cause unconfirmed). Re-check on refresh
 - [ ] Ingest: Pollstar Top 300/200 PDFs (2019, 2022, 2023)
 - [ ] Ingest: Wikipedia pageviews per artist
-- [ ] Clean: country tagging for the US + Canada subset (some tables have no Country column)
+- [x] Clean: country tagging for the US + Canada subset + tests
+  - Spellings standardized (Peru, Czech Republic, UK nations -> United Kingdom); page text kept in country_raw
+  - 215 blanks filled (213 by unambiguous city, 2 by tour neighbors); source in country_source
+  - 24 still blank: ambiguous cities (London, Hamburg) or no city at all. Only 3 have a show date
+  - Puerto Rico counts as US + Canada market (in_us_canada) with its own is_puerto_rico flag
+  - Model-ready US + Canada + PR: 8,416 engagements (18 in Puerto Rico), 68.4% sold out
 - [x] Clean: artist name normalization + credit matching (lead vs featured) + tests
   - Canonical artist titles via Wikipedia API; package tours flagged (American Idol, Honda Civic
     Tour, Top Dawg Entertainment, Various Artists)
@@ -68,8 +73,10 @@
 - [ ] Ingest: Wikipedia pageviews per artist (daily, Jul 2015 onward) + tests (running)
   - views_total = current title + all redirects (former names), views_canonical kept separately
   - Human readers only (agent=user); cache filenames hashed (Windows ignores case)
-- [ ] README: limitations section (TikTok chart 2023-25 paywalled, no Apple Music history,
-      Spotify data ends 2021, Hot 100 top-100 cutoff)
+- [ ] README: limitations section (TikTok chart 2023-25 paywalled, no Apple Music, Tidal or
+      SoundCloud chart history, Spotify data ends 2021, Hot 100 top-100 cutoff). Note that
+      Billboard already counts streams from those services, just not separately
+      Also: Puerto Rico is in the US market but listens differently (control flag, few shows)
 - [ ] Load into SQLite (schema.sql)
 - [ ] Features: as-of-show-date chart and pageview signals + tests (no leakage)
 - [ ] SQL analysis layer (CTEs, window functions)

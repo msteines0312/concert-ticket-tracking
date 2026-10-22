@@ -75,3 +75,8 @@ Part 1 is a logistic regression for the chance of selling out. Part 2 predicts h
 **Research findings.** Since 2013 the Hot 100 already counts streaming and YouTube, so Billboard isn't radio-only, but its top-100 cutoff misses widely known songs that never rank. Spotify's Top 200 (with stream counts) and Viral 50 charts are available for 2017-2021 under an open database license. TikTok's Billboard chart existed only from 2023 to 2025 and sits behind a paywall, and Apple Music has no public history.
 
 **Decision (accepted recommendation).** The main model uses Billboard plus Wikipedia pageviews across 2015-2025. A separate 2017-2021 sub-analysis tests whether Spotify US stream counts and Viral 50 virality add predictive power on top. TikTok and Apple Music are documented as limitations and future work.
+
+## 13. Puerto Rico: inside the US market, but flagged
+**My call.** The AI asked whether Puerto Rico's shows belong in the US + Canada analysis. I said yes, since Billboard's US charts cover it, but required that it be marked separately because listening there is culturally different (much more Latin music), so a US chart signal may not track local demand the same way.
+
+**Outcome.** Puerto Rico shows count toward the US + Canada sample and carry their own `is_puerto_rico` flag, so models can control for the difference and it can be tested once features exist. There are only 18 model-ready Puerto Rico shows, which will be noted as a limitation.

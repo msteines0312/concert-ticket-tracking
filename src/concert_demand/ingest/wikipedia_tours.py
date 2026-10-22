@@ -45,6 +45,7 @@ from concert_demand.clean.attendance import (
     standardize_columns,
     strip_footnotes,
 )
+from concert_demand.clean.countries import tag_countries
 from concert_demand.paths import INTERIM_DIR, RAW_DIR
 
 API_URL = "https://en.wikipedia.org/w/api.php"
@@ -532,6 +533,12 @@ def run(start_year, end_year, output_path=OUTPUT_PATH, sources_path=SOURCES_PATH
     # Redirects can make two category entries resolve to the same article
     engagements = engagements.drop_duplicates()
     engagements = canonicalize_artists(session, engagements)
+    # Needs every tour's rows at once: blanks are filled from cities and
+    # neighboring shows, so this can't run page by page
+    engagements = tag_countries(engagements)
+    filled = engagements["country_source"].isin(["city_lookup", "tour_neighbors"]).sum()
+    logger.info("Filled %d blank countries, %d still blank",
+                filled, engagements["country"].isna().sum())
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     engagements.to_csv(output_path, index=False)
