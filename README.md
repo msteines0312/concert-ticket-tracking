@@ -27,5 +27,36 @@ No data files are committed to this repo. Every dataset is downloaded and rebuil
 
 Data that hasn't been used yet will be added here when it is. That includes Pollstar files that aren't confirmed, and any later sources such as MusicBrainz.
 
+## Limitations
+<!-- DRAFT for Matt to rewrite in his own voice. Numbers are current as of October 2026. -->
+
+**Which shows are in the data**
+- Only tours with a Wikipedia article and reported box office are included, which tilts the sample toward big, successful tours. Smaller acts and quiet tours are mostly missing.
+- Coverage thins out after 2019: 261 tours started in 2015-19, 109 in 2022-25.
+- The model sample is 5,806 US and Canada shows from December 2016 to April 2026. Earlier shows lack a full year of pageview history before their booking cutoff.
+- 18 shows are in Puerto Rico. They count as part of the US market, since Billboard's US charts cover it, but listening there is different (more Latin music), so they carry their own flag.
+
+**How accurate the ticket figures are**
+- Wikipedia's numbers are secondhand: editors copy them from Billboard Boxscore and Pollstar. Checked against Pollstar's year-end charts (2019, 2022, 2023), 95% of 476 matched engagements are within 1% on tickets sold.
+- That check only covers the top-grossing shows of those years, so it says less about smaller shows.
+- Wikipedia tends to round near-sellouts up. 18 shows it lists as sold out were 96-99% sold in Pollstar, against 2 in the other direction. "Sold out" means exactly 100% in the main model, with 97% tested as a robustness check.
+
+**What the popularity signals miss**
+- Billboard's Hot 100 has a top-100 cutoff, so widely known songs that never ranked don't count.
+- Spotify chart data only covers 2017-2021, so the streaming comparison is a sub-analysis. TikTok's Billboard chart (2023-25) is paywalled, and Apple Music, Tidal and SoundCloud have no public chart history. Billboard already counts streams from all of these, just not separately.
+- Wikipedia pageviews measure attention at a moment in time, not the size of a fan base. Example: Migos drew more pageviews than Drake in the year before their joint 2018 tour, so the co-headliner rule uses Migos' numbers.
+- Only English and Spanish Wikipedia are counted. Artists whose fans mostly read another language (K-pop in Korean, Brazilian artists in Portuguese) are undercounted.
+
+**COVID**
+- Only 5 model-ready US shows took place during the shutdown (March 2020 to August 2021), so the COVID analysis compares before and after, not during.
+
+**Production level and one-hit acts**
+- Production level is labeled from what each tour's Wikipedia article says. 149 of 240 articles don't describe the show at all, and the ones that do skew toward notable productions, so plain shows are underrepresented (11 labeled Standard). Labels were made with AI assistance and spot-checked by hand against the same evidence.
+- Only two acts meet the one-hit definition (Kim Petras and Tate McRae), so that analysis is a case study, not a model feature.
+
+**What the results can and can't say**
+- This is observational data. Results show which signals line up with demand, not what causes it.
+- Average ticket price is the price after dynamic pricing reacted to demand, so it partly reflects the outcome being predicted. It's only used in the model behind a test that checks for exactly that.
+
 ## Status
 See [tasks/todo.md](tasks/todo.md) for progress. Full README (tech stack, how to run, key features, what I learned) will be written once the pipeline is complete.
