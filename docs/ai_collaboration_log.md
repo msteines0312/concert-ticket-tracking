@@ -204,8 +204,10 @@ I went through a second batch of choices about what goes into the models. I acce
 - **Previous tour:** the artist's most recent other tour, worldwide, using only shows that ended before the cutoff. 125 of 240 tours have one.
 - **Inflation:** previous-tour prices are converted to constant dollars with the BLS CPI-U annual average.
 
-## 28. Questioning a strange history value
-**My call.** Reviewing the first build, I asked how Future's previous tour could be a single show with a 0% sellout rate, since it sounded like a cancellation.
+## 28. Catching a flaw in the previous-tour rule
+**Caught.** The AI built the previous-tour history, and its summary mentioned in passing that some previous tours were tiny. It treated that as a threshold question. I asked how Future's previous tour could be a single show with a 0% sellout rate, since it sounded like a cancellation. That question is what exposed the bug: the AI's rule was wrong, and its tests hadn't covered the cases that broke it.
 
 **Outcome.** It wasn't a cancellation. Future's Hndrxx Tour page lists only one box score row, a show that was 96% full but counts as a miss under the exactly-100% rule. Tracing it exposed a flaw in the AI's "most recent tour" rule: it also picked tours that had barely started at the cutoff (Bad Bunny's El Último Tour del Mundo, one show in, instead of his 36-show X 100pre Tour) and a small side tour running alongside a main one (Ed Sheeran's − Tour, one show at 0%, instead of the 84-show ÷ Tour). I chose the AI's recommended fix: the previous tour must have at least 5 finished shows, otherwise the rule falls back to the one before it. I also accepted adding the previous tour's average fill rate next to its sellout rate, which mattered right away: Future's Nobody Safe Tour sold out 11% of its shows but was 94% full, and Ed Sheeran's ÷ Tour sold out 73% but was 98% full. 119 of 240 tours now have a previous tour.
+
+**My call (tours still in progress).** Under the new rule, a tour still running at the cutoff can count once it has 5 finished shows (Bad Bunny's later World's Hottest dates use El Último Tour del Mundo). I chose to keep it as is.
 
