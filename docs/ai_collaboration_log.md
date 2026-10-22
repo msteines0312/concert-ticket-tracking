@@ -53,3 +53,22 @@ Part 1 is a logistic regression for the chance of selling out. Part 2 predicts h
 
 ## 9. This log
 **My call.** I asked for this record to be kept throughout the project so the process is as reviewable as the code.
+
+## 10. Featured credits: kept separate from lead credits
+**Redirected.** The AI proposed building two chart signals (lead credits only vs. any credit) and letting the model pick. I agreed, but required that every credit keep its role, because a featured appearance can be the first sign of a breakout. My example: Don Toliver's feature on Travis Scott's "Can't Say" (2018) launched his career before he led anything.
+
+**Outcome.** Credits are stored as lead or featured. The data backed the idea: 17 of 123 tour artists with both credit types were featured before they ever led a chart entry, including The Weeknd (Drake's "Crew Love," 7 months before his first lead) and Charli XCX (Icona Pop's "I Love It," over a year before). "Featured-credit momentum" is now a planned model feature.
+
+## 11. Artist names: required online validation and attention to name changes
+**My call.** I told the AI to look names up online whenever matching was uncertain, and to specifically account for artists who changed their names.
+
+**Outcome.** This turned a simple matching script into a validated process:
+- Wikipedia's API resolved duplicate spellings of the same artist ("the Weeknd" vs. "The Weeknd," "Sam Smith (singer)" vs. "Sam Smith"), which had silently sent all of The Weeknd's chart credits to a duplicate record. A warning now fires on any future name collision.
+- Former names are pulled from Wikipedia redirects (Lady Antebellum to Lady A, Dixie Chicks to The Chicks, Ghost B.C. to Ghost, Paul Simon's early stage names Jerry Landis and Tico and the Triumphs).
+- An audit report of every redirect-based match showed the raw redirects were unsafe: songs and products redirect to artist pages too ("X (fragrance)" to Westlife, "Live (perfume)" to Jennifer Lopez, "Abel." matched the duo "Kane & Abel"). Five filter rules now keep only real alternate names. One-word aliases (Janet, Ye, NKOTB, Ke$ha) are added only after checking the actual chart credits by hand.
+- Final result: 244 of 255 tour artists matched to chart history. The 11 unmatched were each checked and genuinely never appeared on a US Billboard chart (e.g. Helene Fischer, JJ Lin, Dead & Company).
+
+## 12. Popularity beyond Billboard: streaming and social signals
+**My idea.** I raised that Billboard and radio don't capture modern popularity on their own: some songs are widely known without charting high, and Spotify, Apple Music and TikTok-style platforms drive discovery.
+
+**Research findings.** Since 2013 the Hot 100 already counts streaming and YouTube, so Billboard isn't radio-only, but its top-100 cutoff misses widely known songs that never rank. Spotify's Top 200 (with stream counts) and Viral 50 charts are available for 2017-2021 under an open database license. TikTok's Billboard chart existed only from 2023 to 2025 and sits behind a paywall, and Apple Music has no public history. *Decision pending.*

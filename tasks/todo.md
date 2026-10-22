@@ -47,7 +47,12 @@
 - [ ] Ingest: Pollstar Top 300/200 PDFs (2019, 2022, 2023)
 - [ ] Ingest: Wikipedia pageviews per artist
 - [ ] Clean: country tagging for the US + Canada subset (some tables have no Country column)
-- [ ] Clean: artist name normalization across sources + tests
+- [x] Clean: artist name normalization + credit matching (lead vs featured) + tests
+  - Canonical artist titles via Wikipedia API; package tours flagged (American Idol, Honda Civic
+    Tour, Top Dawg Entertainment, Various Artists)
+  - Former names from filtered Wikipedia redirects + hand-checked aliases; audit in alias_matches.csv
+  - 244 of 255 tour artists matched; 212,563 credits (200,904 lead, 11,659 featured)
+- [ ] Decide: Spotify Top 200 + Viral 50 (Kaggle, 2017-2021) as a streaming sub-analysis
 - [ ] Load into SQLite (schema.sql)
 - [ ] Features: as-of-show-date chart and pageview signals + tests (no leakage)
 - [ ] SQL analysis layer (CTEs, window functions)
