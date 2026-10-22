@@ -116,8 +116,9 @@ def run(db_path=DB_PATH, interim_dir=INTERIM_DIR):
     """
     engagements = pd.read_csv(interim_dir / "wikipedia_engagements.csv")
     sources = pd.read_csv(interim_dir / "wikipedia_sources.csv").rename(columns={"title": "tour"})
+    genres = pd.read_csv(interim_dir / "artist_genres.csv", usecols=["artist", "genre_group"])
     tables = {
-        "artists": build_artists(engagements),
+        "artists": build_artists(engagements).merge(genres, on="artist", how="left"),
         "tour_sources": sources,
         "engagements": prepare_engagements(engagements),
         "chart_credits": pd.read_csv(interim_dir / "chart_credits.csv"),

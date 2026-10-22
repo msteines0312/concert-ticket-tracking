@@ -37,11 +37,14 @@ def interim_dir(tmp_path):
                    "wks_on_chart": 1, "artist": "Artist A", "role": "featured"}]
                  ).to_csv(tmp_path / "chart_credits.csv", index=False)
     pd.DataFrame([{"artist": "Artist B", "date": "2018-01-01", "views_total": 10,
-                   "views_canonical": 8}]).to_csv(tmp_path / "pageviews_daily.csv", index=False)
+                   "views_canonical": 8, "views_es": 2}]).to_csv(tmp_path / "pageviews_daily.csv", index=False)
     pd.DataFrame([{"title": "Song", "rank": 3, "date": "2018-01-01", "artist": "Artist A",
                    "region": "United States", "chart": "top200", "streams": 100000,
                    "tour_artist": "Artist A", "role": "lead"}]
                  ).to_csv(tmp_path / "spotify_credits.csv", index=False)
+    pd.DataFrame([{"artist": "Artist A", "genre_group": "Pop"},
+                  {"artist": "Artist B", "genre_group": "Country"}]
+                 ).to_csv(tmp_path / "artist_genres.csv", index=False)
     return tmp_path
 
 
@@ -58,6 +61,8 @@ def test_run_loads_every_table_with_integer_flags(interim_dir, tmp_path):
     with sqlite3.connect(db_path) as connection:
         assert connection.execute("SELECT COUNT(*) FROM engagements").fetchone()[0] == 3
         assert connection.execute("SELECT typeof(sold_out) FROM engagements").fetchone()[0] == "integer"
+        assert connection.execute(
+            "SELECT genre_group FROM artists WHERE artist = 'Artist B'").fetchone()[0] == "Country"
         streams = connection.execute("SELECT performer, artist FROM spotify_credits").fetchone()
         assert streams == ("Artist A", "Artist A")
 

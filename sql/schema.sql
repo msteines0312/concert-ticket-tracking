@@ -27,7 +27,10 @@ DROP TABLE IF EXISTS artists;
 CREATE TABLE artists (
     artist          TEXT PRIMARY KEY,   -- canonical Wikipedia title, e.g. "Drake (musician)"
     headlines_tour  INTEGER NOT NULL CHECK (headlines_tour IN (0, 1)),  -- 0 = only ever co-headlines
-    is_package_tour INTEGER NOT NULL CHECK (is_package_tour IN (0, 1))
+    is_package_tour INTEGER NOT NULL CHECK (is_package_tour IN (0, 1)),
+    -- Billboard chart family from the Wikipedia infobox (clean/genres.py); null for package tours
+    genre_group     TEXT CHECK (genre_group IN ('Pop', 'Rock/Alternative', 'R&B/Hip-Hop', 'Country',
+                                                'Latin', 'Dance/Electronic', 'Other'))
 );
 
 -- Every Wikipedia tour article used, with the exact revision read (CC BY-SA attribution).
@@ -92,6 +95,7 @@ CREATE TABLE pageviews_daily (
     date            TEXT NOT NULL,
     views_total     INTEGER NOT NULL,   -- current title + former-name redirects
     views_canonical INTEGER NOT NULL,   -- current title only
+    views_es        INTEGER NOT NULL,   -- Spanish Wikipedia article + its name redirects
     PRIMARY KEY (artist, date)
 );
 
