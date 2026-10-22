@@ -15,6 +15,7 @@ def _shows(log2_ratios, prev_fills):
     return pd.DataFrame({"engagement_id": range(n), "artist": "Act", "tour": "Tour",
                          "first_date": "2019-01-01", "split": "test_2019", "prev_tour": "Old",
                          "log2_room_ratio": log2_ratios, "prev_tour_fill_rate": prev_fills,
+                         "room_up": np.clip(log2_ratios, 0, None),
                          "sold_out": 1, "fill_rate": 1.0})
 
 

@@ -9,12 +9,9 @@ was left out and under the 97% sellout definition.
 Per show with a previous tour:
 - upsize_odds_multiplier: how growing the room changed the odds of a
   sellout compared with booking the same size room as last time, from the
-  history-sample explanatory model. Below 1 means the move hurt.
-  Only growth is scored; a smaller room gets 1.0. The model fits one
-  straight line through upsizing and downsizing, so it also "predicts"
-  that downsizing after a full tour hurts, but those shows nearly all
-  sold out (Madonna moving from stadiums to theaters: 7 of 7). Matt's
-  score is about upsizing, so downsizing is not scored as a risk.
+  upsizing terms of the history-sample explanatory model. Below 1 means
+  the move hurt. A smaller room gets 1.0: growing and shrinking are
+  modeled separately (noise review), and shrinking showed no effect.
 - upsized_past_rule: the room grew and the previous tour was less full
   than the break-even, i.e. the buyer upsized against the 95% rule.
 
@@ -47,7 +44,7 @@ def score_shows(dataset, effect):
     Parameters
     ----------
     dataset : pandas.DataFrame
-        Model columns (log2_room_ratio, prev_tour_fill_rate).
+        Model columns (room_up, log2_room_ratio, prev_tour_fill_rate).
     effect : dict
         Output of robustness.room_effect.
 
@@ -58,8 +55,7 @@ def score_shows(dataset, effect):
     """
     scored = dataset[dataset["log2_room_ratio"].notna() & dataset["prev_tour_fill_rate"].notna()]
     unfilled = 1 - scored["prev_tour_fill_rate"]
-    growth = scored["log2_room_ratio"].clip(lower=0)   # downsizing is not an upsizing risk
-    log_odds = growth * (effect["room_main"] + effect["room_interaction"] * unfilled)
+    log_odds = scored["room_up"] * (effect["room_main"] + effect["room_interaction"] * unfilled)
     return pd.DataFrame({
         "engagement_id": scored["engagement_id"], "artist": scored["artist"],
         "tour": scored["tour"], "first_date": scored["first_date"], "split": scored["split"],
@@ -88,7 +84,7 @@ def summarize_tours(scores):
 def run(dataset_path=DATASET_PATH, db_path=DB_PATH):
     """Score every show, summarize by tour, and save both (CSV + database for the dashboard)."""
     dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
-    dummies = sellout.control_dummies(dataset)
+    dummies = sellout.control_dummies(dataset, explain=True)
     ladder, blocks = sellout.EXPLANATORY["history"]
     effect = room_effect(sellout.explanatory_model(dataset, dummies, ladder, blocks))
 

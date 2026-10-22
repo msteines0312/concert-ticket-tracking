@@ -13,7 +13,9 @@ and test are purely pre-COVID. Tours that started during the shutdown are
 excluded too. Excluded shows stay in the file for the COVID comparison.
 
 Signals. Chart points get a charted yes/no flag plus log(1 + points), since
-40% of shows had no Hot 100 entry in the window. Pageviews are logged: a
+40% of shows had no Hot 100 entry in the window. (The models stopped using
+the flags in the noise review: log(1 + points) is already 0 for a show that
+didn't chart, and the two were 95% correlated.) Pageviews are logged: a
 jump from 1K to 2K views a day should count more than 30K to 31K.
 
 History. For the harder baseline, each show gets the billed artist's most

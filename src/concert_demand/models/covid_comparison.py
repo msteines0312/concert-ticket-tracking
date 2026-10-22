@@ -114,7 +114,7 @@ def fit_comparison(dataset, dummies):
 def run(dataset_path=DATASET_PATH):
     """Fit the COVID comparison and save it."""
     dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
-    table = fit_comparison(dataset, sellout.control_dummies(dataset))
+    table = fit_comparison(dataset, sellout.control_dummies(dataset, explain=True))
     sellout.TABLES_DIR.mkdir(parents=True, exist_ok=True)
     table.to_csv(sellout.TABLES_DIR / "covid_comparison.csv", index=False)
     logger.info("COVID comparison (%d pre, %d post shows, %d artists):\n%s",

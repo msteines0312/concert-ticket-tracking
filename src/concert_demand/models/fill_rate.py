@@ -137,6 +137,7 @@ def run_ladder(dataset, dummies, ladder):
                             **{k: 100 * v for k, v in interval.items()}})
     out = pd.DataFrame(results)
     out["mae_change_pts"] = out.groupby(["ladder", "test_split"])["mae_pts"].diff()
+    out["thin_test"] = out["test_tours"] < sellout.THIN_TEST_TOURS
     return out
 
 
@@ -170,13 +171,13 @@ def run(dataset_path=DATASET_PATH):
     dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
     dummies = sellout.control_dummies(dataset)
     ladders = pd.concat([run_ladder(dataset, dummies, name) for name in LADDERS], ignore_index=True)
-    coefficients = explanatory_model(dataset, dummies)
+    coefficients = explanatory_model(dataset, sellout.control_dummies(dataset, explain=True))
 
     sellout.TABLES_DIR.mkdir(parents=True, exist_ok=True)
     ladders.to_csv(sellout.TABLES_DIR / "fill_rate_ladders.csv", index=False)
     coefficients.to_csv(sellout.TABLES_DIR / "fill_rate_coefficients.csv", index=False)
     logger.info("Fill rate ladders (MAE, percentage points):\n%s", ladders[
-        ["ladder", "test_split", "added_block", "test_tours", "mae_pts", "mae_change_pts",
+        ["ladder", "test_split", "added_block", "test_tours", "thin_test", "mae_pts", "mae_change_pts",
          "change_low", "change_high"]].round(2).to_string(index=False))
     logger.info("Explanatory (%d shows, %d artists):\n%s", coefficients["n_shows"].iloc[0],
                 coefficients["n_artists"].iloc[0],

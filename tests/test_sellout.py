@@ -23,9 +23,15 @@ def _controls(n, **overrides):
     return frame
 
 
+def test_genre_is_only_in_the_explanatory_controls():
+    data = _controls(2, genre_group=["Rock/Alternative", "Pop"])
+    assert "genre_group=Pop" not in control_dummies(data)          # predictive models
+    assert "genre_group=Pop" in control_dummies(data, explain=True)  # explanatory models
+
+
 def test_dummies_keep_the_same_columns_when_a_split_lacks_a_level():
     data = _controls(3, genre_group=["Rock/Alternative", "Pop", "Latin"])
-    dummies = control_dummies(data)
+    dummies = control_dummies(data, explain=True)
     assert "genre_group=Pop" in dummies and "genre_group=Latin" in dummies
     assert "genre_group=Rock/Alternative" not in dummies  # reference level
     # A test split with only rock shows still gets the Pop column (all zeros).
@@ -81,14 +87,17 @@ def test_a_block_that_drives_the_outcome_raises_test_auc(monkeypatch):
     assert results.iloc[1]["gain_low"] > 0
 
 
-def test_room_interaction_is_zero_after_a_full_tour():
+def test_room_terms_split_growing_and_shrinking():
     data = pd.DataFrame({"hot100_lead_entries_career": [0, 0], "billboard200_lead_entries_career": [0, 0],
-                         "prev_tour_price_2024usd": [100.0, 100.0], "log2_room_ratio": [1.0, 1.0],
+                         "prev_tour_price_2024usd": [100.0, 100.0], "log2_room_ratio": [1.0, -1.0],
                          "prev_tour_fill_rate": [1.0, 0.9], "show_price_2024usd": [90.0, 90.0],
                          "n_shows": [1, 1]})
     out = add_model_columns(data)
-    # Doubling after a 100%-full tour: only the main effect applies.
-    assert out["room_x_prev_unfilled"].tolist() == pytest.approx([0.0, 0.1])
+    # Doubling after a 100%-full tour, then halving after a 90%-full one.
+    assert out["room_up"].tolist() == [1.0, 0.0]
+    assert out["room_down"].tolist() == [0.0, -1.0]
+    assert out["room_up_x_prev_unfilled"].tolist() == pytest.approx([0.0, 0.0])
+    assert out["room_down_x_prev_unfilled"].tolist() == pytest.approx([0.0, -0.1])
 
 
 def test_shows_outside_the_spotify_window_leave_the_spotify_ladder():

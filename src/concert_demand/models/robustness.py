@@ -12,7 +12,13 @@ how much the signals add (full AUC minus controls AUC, paired by tour):
   years (fit on tours starting before 2018, score tours starting in 2018)
 - worldwide: every country, not only the US + Canada
 - artist_cv: 5-fold cross-validation grouped by artist (each artist is only
-  ever in train or test), all years pooled, no time order
+  ever in train or test), all years, no time order, repeated with 10 random
+  groupings. AUC is computed inside each fold and averaged. Pooling all
+  out-of-fold predictions into one AUC was the first version, and it is
+  biased: artists differ so much in how often they sell out that a fold
+  holding out high-sellout artists predicts low for exactly the shows that
+  sold out, which drags the pooled AUC below 0.5 (room size alone scored
+  0.43 pooled vs. 0.54 per fold).
 The nights leakage check lives in the sellout ladders (nights_leakage).
 
 Leave one tour out (Matt's call, 2026-10-21): the room-change finding
@@ -41,7 +47,10 @@ from concert_demand.models.dataset import OUTPUT_PATH as DATASET_PATH
 from concert_demand.models.dataset import add_signal_transforms, build_model_dataset
 from concert_demand.paths import PROCESSED_DIR
 
-ROOM_MAIN, ROOM_INTERACTION = sellout.NATURAL_UNITS
+# The upsizing terms (noise review: growing and shrinking the room are
+# modeled separately, and only growing has an effect).
+ROOM_MAIN, ROOM_INTERACTION = "room_up", "room_up_x_prev_unfilled"
+N_REPEATS = 10
 FULL_BLOCKS = ["controls", "charts", "pageviews", "career"]
 INNER_TRAIN_END = pd.Timestamp("2018-01-01")   # window check: fit before, score after
 N_FOLDS = 5
@@ -119,17 +128,37 @@ def inner_time_gain(check, dataset, dummies):
     return signal_gain(check, data, dummies, early, {"inner_2018": ~early})
 
 
-def artist_cv_gain(dataset, dummies):
-    """Pooled out-of-fold AUC from cross-validation grouped by artist."""
+def artist_cv_gain(dataset, dummies, n_repeats=N_REPEATS):
+    """Per-fold AUC from repeated cross-validation grouped by artist.
+
+    Returns
+    -------
+    list of dict
+        One summary row: mean fold AUC of both models, the mean gain, the
+        2.5th-97.5th percentile of fold gains, and the share of folds where
+        the signals helped.
+    """
     data = dataset[sellout.ladder_rows(dataset, "charts_first")]
     frame = pd.concat([data, dummies.loc[data.index]], axis=1)
     columns = model_columns(dummies)
-    predictions = {step: np.zeros(len(frame)) for step in columns}
-    for fit_idx, score_idx in GroupKFold(n_splits=N_FOLDS).split(frame, groups=frame["artist"]):
-        fit, score = frame.iloc[fit_idx], frame.iloc[score_idx]
-        for step, cols in columns.items():
-            predictions[step][score_idx] = sellout.fit_predict(fit[cols], fit["sold_out"], score[cols])
-    return [scored_row("artist_cv", f"{N_FOLDS}_fold_pooled", frame, predictions)]
+    aucs = {step: [] for step in columns}
+    for repeat in range(n_repeats):
+        folds = GroupKFold(n_splits=N_FOLDS, shuffle=True, random_state=repeat)
+        for fit_idx, score_idx in folds.split(frame, groups=frame["artist"]):
+            fit, score = frame.iloc[fit_idx], frame.iloc[score_idx]
+            if score["sold_out"].nunique() < 2:
+                continue  # AUC needs both outcomes in the fold
+            for step, cols in columns.items():
+                p = sellout.fit_predict(fit[cols], fit["sold_out"], score[cols])
+                aucs[step].append(roc_auc_score(score["sold_out"], p))
+    controls, full = np.array(aucs["controls"]), np.array(aucs["full"])
+    gain = full - controls
+    return [{"check": "artist_cv", "test": f"{n_repeats}x{N_FOLDS}_fold_mean",
+             "shows": len(frame), "tours": frame["tour"].nunique(),
+             "sellout_rate": frame["sold_out"].mean(),
+             "auc_controls": controls.mean(), "auc_full": full.mean(), "signal_gain": gain.mean(),
+             "gain_low": np.percentile(gain, 2.5), "gain_high": np.percentile(gain, 97.5),
+             "share_folds_better": float((gain > 0).mean())}]
 
 
 def swap_signals(dataset, replacement):
@@ -213,8 +242,11 @@ def run_signal_checks(dataset, dummies):
     rows += artist_cv_gain(dataset, dummies)
 
     _, blocks = sellout.EXPLANATORY["history"]
-    room_97 = room_effect(sellout.explanatory_model(strict, dummies, "history", blocks))
-    return pd.DataFrame(rows), room_97
+    explain_dummies = sellout.control_dummies(dataset, explain=True)
+    room_97 = room_effect(sellout.explanatory_model(strict, explain_dummies, "history", blocks))
+    summary = pd.DataFrame(rows)
+    summary["thin_test"] = summary["tours"] < sellout.THIN_TEST_TOURS
+    return summary, room_97
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +335,7 @@ def run(dataset_path=DATASET_PATH):
     logger.info("Room effect, 97%% sellout definition: %s",
                 {key: round(value, 4) for key, value in room_97.items()})
 
-    results = leave_one_tour_out(dataset, dummies)
+    results = leave_one_tour_out(dataset, sellout.control_dummies(dataset, explain=True))
     results.to_csv(sellout.TABLES_DIR / "room_leave_one_tour_out.csv", index=False)
     log_leave_one_out(results)
     return summary, results

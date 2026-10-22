@@ -160,7 +160,9 @@ def score_variants(dataset, dummies):
                             "mean_predicted": float(np.mean(p)), "actual_mean": float(np.mean(y)),
                             "vs_baseline_low": 100 * interval["change_low"],
                             "vs_baseline_high": 100 * interval["change_high"]})
-    return pd.DataFrame(results)
+    out = pd.DataFrame(results)
+    out["thin_test"] = out["test_tours"] < sellout.THIN_TEST_TOURS
+    return out
 
 
 def run(dataset_path=DATASET_PATH):

@@ -260,3 +260,20 @@ The overall answer to the project question: chart and pageview signals measured 
 ## 35. Applying my window rule
 **My call.** In Phase 1 I set the rule that 26-week signal windows would be kept only if they beat the 52-week window plus 13-week momentum on the training years. They tied (AUC 0.640 vs. 0.637 when fitting on 2017 tours and scoring 2018 tours). I agreed that a tie doesn't meet the rule, so the models keep 52 weeks.
 
+## 36. Noise review
+**My call.** After Phase 2 I asked for a review of which parts of the analysis add noise instead of signal. Every check was run on the training tours only (cross-validation grouped by artist), so cutting features couldn't be tuned to the test sets.
+
+**Two problems found in the AI's work first.**
+- **The production block was never built.** I chose production level and set length as a separate add-on block when planning Phase 2, and it was skipped. In the review it turned out to carry the most information of any block (+0.051 AUC in training CV, better in 78% of folds).
+- **A biased cross-validation score.** The first diagnostics pooled out-of-fold predictions into one AUC, which came out below 0.5 for every model. Because artists differ so much in how often they sell out, pooling penalizes the model for those differences; scoring each fold separately fixed it (room size alone: 0.43 pooled, 0.54 per fold). The artist-grouped robustness check already committed used the pooled version and gets the same fix.
+
+**Decisions.**
+- **Production (accepted):** run as the add-on block I originally chose, with a check on whether the gain comes from real production levels or only from whether Wikipedia describes the show at all, which would make it a measure of attention.
+- **Charts (accepted):** drop the yes/no "charted" flags. They were 95% correlated with chart points, which made the coefficients flip sign, and dropping them helped in 74% of folds.
+- **Genre (accepted):** out of the predictive models, where it added noise, but kept in the explanatory models, where it controls for real genre differences.
+- **Room size (accepted):** separate terms for upsizing and downsizing, which fit clearly better. Upsizing is the real effect, with a break-even of about 92% full; downsizing shows none. This replaces the workaround in the right-sizing score.
+- **Career (overrode):** the AI recommended keeping only Hot 100 career entries, since Billboard 200 career added nothing. I kept both, so album careers stay in for my "albums mean fans" idea.
+- **Thin tests (accepted):** results on fewer than 25 tours stay in the tables, flagged as thin, and out of headline claims.
+- **Spotify and Part 2 (accepted):** both kept and reported as clean negative results rather than cut or tuned.
+- **Momentum:** dropping it made predictions worse (30% of folds better), so it stays.
+

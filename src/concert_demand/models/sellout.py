@@ -16,6 +16,18 @@ Room change (Matt's idea) enters that ladder right after history: this room
 vs. the previous tour's typical room, and how that interacts with how full
 the previous tour was.
 
+Noise review (Matt, 2026-10-21), judged on training tours only:
+- Charts: the yes/no "charted" flags were dropped. They were 95% correlated
+  with log(1 + points), which is already 0 for a show that didn't chart, and
+  made the coefficients flip sign.
+- Genre: out of the predictive models (it added noise there), kept in the
+  explanatory models, where it controls for genre differences.
+- Room: separate terms for growing and shrinking the room. One straight line
+  through both fit worse and made downsizing mirror upsizing.
+- Production (Matt's Phase 1 idea) is an add-on block, tested two ways:
+  with its levels, and as described vs. not described only, to see whether
+  the gain is production or just Wikipedia attention.
+
 Two jobs, two tools:
 - Prediction (scikit-learn): plain logistic regression fit on train tours,
   scored on test_2019 and holdout_post. AUC is the main score because the
@@ -58,15 +70,24 @@ CATEGORICAL_CONTROLS = {
     "genre_group": "Rock/Alternative",
     "country": "United States",
 }
+# Explanatory models only (noise review): genre added noise to predictions.
+EXPLAIN_ONLY_CONTROLS = {"genre_group"}
+
+# Results on fewer tours than this are flagged as thin and kept out of
+# headline claims (Matt, noise review).
+THIN_TEST_TOURS = 25
 
 BLOCKS = {
     "controls": ["log_capacity_per_show"],  # + the categorical dummies, added in design_matrix
-    "charts": ["hot100_charted_52w", "log_hot100_points_52w", "billboard200_charted_52w",
-               "log_billboard200_points_52w", "hot100_lead_momentum"],
+    "charts": ["log_hot100_points_52w", "log_billboard200_points_52w", "hot100_lead_momentum"],
     "pageviews": ["log_pageviews_52w", "pageviews_momentum"],
     "career": ["log_hot100_career_entries", "log_billboard200_career_entries"],
     "history": ["prev_tour_sellout_rate", "prev_tour_fill_rate", "log_prev_tour_price"],
-    "room": ["log2_room_ratio", "room_x_prev_unfilled"],
+    "room": ["room_up", "room_up_x_prev_unfilled", "room_down", "room_down_x_prev_unfilled"],
+    # Reference level: the article doesn't describe the show.
+    "production": ["production_standard", "production_enhanced", "production_themed",
+                   "has_set_length", "set_length_songs"],
+    "production_described": ["production_described"],
     # Only for the demos and sub-analyses below, never the main model.
     "show_price": ["log_show_price"],
     "spotify": ["log_spotify_lead_streams_52w", "log_spotify_featured_streams_52w",
@@ -77,7 +98,7 @@ BLOCKS = {
 # Room terms stay in natural units in the explanatory model (per doubling of
 # room size). Standardizing an interaction separately from its parts would
 # make the main effect's coefficient hard to read.
-NATURAL_UNITS = ["log2_room_ratio", "room_x_prev_unfilled"]
+NATURAL_UNITS = ["room_up", "room_up_x_prev_unfilled", "room_down", "room_down_x_prev_unfilled"]
 
 LADDERS = {
     "charts_first": ["controls", "charts", "pageviews", "career"],
@@ -91,12 +112,17 @@ LADDERS = {
     "spotify": ["controls", "charts", "pageviews", "spotify"],
     # Nights leakage check: buyers add nights after early nights sell out.
     "nights_leakage": ["controls", "charts", "pageviews", "career", "nights"],
+    # Production add-on, and the attention check: is the gain production
+    # level, or only whether Wikipedia describes the show?
+    "production": ["controls", "charts", "pageviews", "career", "production"],
+    "production_described": ["controls", "charts", "pageviews", "career", "production_described"],
 }
 
 # Explanatory fits: the full sample, and the history subset with room change.
 EXPLANATORY = {
     "all": ("charts_first", ["controls", "charts", "pageviews", "career"]),
     "history": ("history", ["controls", "history", "room", "charts", "pageviews", "career"]),
+    "production": ("production", ["controls", "charts", "pageviews", "career", "production"]),
 }
 
 TABLES_DIR = PROJECT_ROOT / "reports" / "tables"
@@ -127,20 +153,49 @@ def add_model_columns(dataset):
             out[f"log_{column}"] = np.log1p(out[column])
     if "spotify_lead_viral_entries_52w" in out:
         out["log_spotify_lead_viral_52w"] = np.log1p(out["spotify_lead_viral_entries_52w"])
-    # Coded as the unfilled share (1 - fill), so log2_room_ratio's own
-    # coefficient is the effect of upsizing after a tour that was 100% full,
-    # and the interaction is how much worse upsizing gets per point of the
-    # last tour left unfilled (Matt's choice of interaction).
-    out["room_x_prev_unfilled"] = out["log2_room_ratio"] * (1 - out["prev_tour_fill_rate"])
+    # Room change, split into growing and shrinking (noise review). Each is
+    # interacted with the previous tour's unfilled share (1 - fill), so the
+    # main term is the effect after a tour that was 100% full, and the
+    # interaction is how that changes per point the last tour left unfilled.
+    unfilled = 1 - out["prev_tour_fill_rate"]
+    out["room_up"] = out["log2_room_ratio"].clip(lower=0)
+    out["room_down"] = out["log2_room_ratio"].clip(upper=0)
+    out["room_up_x_prev_unfilled"] = out["room_up"] * unfilled
+    out["room_down_x_prev_unfilled"] = out["room_down"] * unfilled
+    if "production_level" in out:
+        out = add_production_columns(out)
     return out
 
 
-def control_dummies(dataset):
+def add_production_columns(out):
+    """Production level dummies and set length (Matt's production rubric).
+
+    Set length is missing for some tours, and three suspect counts (outside
+    10-50 songs) are treated as missing. Missing values get the training
+    median plus a has_set_length flag, so those tours stay in the sample.
+    """
+    level = out["production_level"].fillna("not_described")
+    for name in ["standard", "enhanced", "themed"]:
+        out[f"production_{name}"] = (level == name).astype(int)
+    out["production_described"] = (level != "not_described").astype(int)
+    songs = out["set_list_songs"].where(out["set_list_suspect"] != 1)
+    out["has_set_length"] = songs.notna().astype(int)
+    out["set_length_songs"] = songs.fillna(songs[out["split"] == "train"].median())
+    return out
+
+
+def control_dummies(dataset, explain=False):
     """One-hot encode the categorical controls with fixed reference levels.
 
     Encoding the whole dataset at once (not each split separately) keeps
     the same columns in train and test even when a test split lacks a
     category.
+
+    Parameters
+    ----------
+    dataset : pandas.DataFrame
+    explain : bool
+        True for explanatory models, which also get EXPLAIN_ONLY_CONTROLS.
 
     Returns
     -------
@@ -149,6 +204,8 @@ def control_dummies(dataset):
     """
     dummies = []
     for column, reference in CATEGORICAL_CONTROLS.items():
+        if column in EXPLAIN_ONLY_CONTROLS and not explain:
+            continue
         levels = sorted(set(dataset[column].dropna()) - {reference})
         for level in levels:
             dummies.append((dataset[column] == level).astype(int).rename(f"{column}={level}"))
@@ -285,6 +342,7 @@ def run_ladder(dataset, dummies, ladder):
             zip(results[-len(predictions):], intervals.drop(columns="step").to_dict("records"))]
     out = pd.DataFrame(results)
     out["auc_gain"] = out.groupby(["ladder", "test_split"])["auc"].diff()
+    out["thin_test"] = out["test_tours"] < THIN_TEST_TOURS
     return out
 
 
@@ -373,15 +431,16 @@ def run(dataset_path=DATASET_PATH):
     """Run all ladders and the explanatory model; save both tables."""
     dataset = add_model_columns(pd.read_csv(dataset_path))
     dummies = control_dummies(dataset)
+    explain_dummies = control_dummies(dataset, explain=True)
     ladders = pd.concat([run_ladder(dataset, dummies, name) for name in LADDERS], ignore_index=True)
-    coefficients = pd.concat([explanatory_model(dataset, dummies, ladder, blocks).assign(sample=name)
+    coefficients = pd.concat([explanatory_model(dataset, explain_dummies, ladder, blocks).assign(sample=name)
                               for name, (ladder, blocks) in EXPLANATORY.items()], ignore_index=True)
 
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     ladders.to_csv(TABLES_DIR / "sellout_ladders.csv", index=False)
     coefficients.to_csv(TABLES_DIR / "sellout_coefficients.csv", index=False)
 
-    view = ["ladder", "test_split", "added_block", "test_tours", "auc", "auc_gain",
+    view = ["ladder", "test_split", "added_block", "test_tours", "thin_test", "auc", "auc_gain",
             "gain_low", "gain_high", "mean_predicted", "actual_rate"]
     logger.info("Ladders:\n%s", ladders[view].round(3).to_string(index=False))
     for name, table in coefficients.groupby("sample", sort=False):
