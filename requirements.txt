@@ -10,3 +10,4 @@ pillow>=10.0     # cleans up scanned pages before OCR (2019 Pollstar)
 mwparserfromhell>=0.6  # parses Wikipedia infobox templates
 kaggle>=1.7       # downloads the Spotify charts dataset (needs a Kaggle API token)
 pytest>=8.2
+ipykernel>=6.29   # runs the exploration notebook
