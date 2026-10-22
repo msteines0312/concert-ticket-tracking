@@ -100,3 +100,18 @@ I accepted the AI's recommendations on how to fix each one.
 **Redirected.** The AI proposed keeping 2020-21 shows with a COVID flag and running one robustness check without them. I wanted COVID to be part of the analysis itself: compare shows before and after the shutdown, since fans came back with pent-up demand and different habits.
 
 **Outcome.** Every show is labeled pre, during or post shutdown (March 12, 2020 to August 1, 2021). There are only 5 model-ready US shows during the shutdown, so the comparison is pre (6,165 shows) vs. post (2,194 shows): does the same chart or pageview signal predict sellouts differently after COVID?
+
+## 16. When to measure popularity: six months before the show
+**Accepted.** The AI asked whether chart and pageview signals should be measured on the show date or earlier. It recommended six months before, as a stand-in for when the venue is booked and tickets go on sale, because tour announcements and sellout news push pageviews up in the months before a show. Measuring on the show date would let the tour's own hype leak into the signal and overstate how well it predicts demand. I agreed.
+
+**Outcome.** Signals are measured as of six months before each show. The show-date version is kept only as a robustness check.
+
+## 17. Lookback windows: more data, but only if it isn't noise
+**Redirected.** The AI offered three choices: a 52-week window plus 13-week momentum (its recommendation), a 26-week window, or building several windows and letting the model choose. It warned that the last option risks overfitting. I asked for a mix: build the extra windows, but keep one only if it actually improves the model.
+
+**Outcome.** The 52-week window plus 13-week momentum is the baseline. A 26-week window is also built, and it stays only if it beats the baseline in time-based cross-validation on the training years, so the extra window can't be tuned against the test set. The 52-week window sets the model start date at about January 2017 (roughly 5,800 US and Canada shows).
+
+## 18. Keeping the record current
+**My call.** Partway through this phase I asked for the task list to be checked off as each item finishes, and for this log to be updated from the session transcript after every two completed tasks, instead of in one pass at the end.
+
+**Outcome.** Entries 16 to 18 are the first update made on that schedule. The same session's Pollstar validation found that Wikipedia labels some near-sellouts (96 to 99% sold in Pollstar) as sold out. That raises a question about how "sold out" should be defined, which I still need to decide before modeling.
