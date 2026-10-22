@@ -21,7 +21,7 @@ No data files are committed to this repo. Every dataset is downloaded and rebuil
 - Wikipedia contributors. "[year] concert tours" category articles. *Wikipedia, The Free Encyclopedia*. Retrieved October 2026. Per-article list: see the source list described above.
 - Pollstar. "2023 Year End Top 300 Concert Grosses." *Pollstar*, December 11, 2023. [PDF](https://data.pollstar.com/Chart/2024/01/121123_ye.top300.concert.grosses_digital_1040.pdf)
 - Pollstar. "2022 Year End Top 300 Concert Grosses." *Pollstar*, December 2022. [PDF](https://data.pollstar.com/chart/2022/12/121222.top.300.concert.grosses_1027.pdf)
-- Pollstar. "2019 Year End Top 200 Concert Grosses." *Pollstar*, December 2019. [PDF](https://www.pollstar.com/Chart/2019/12/Top200ConcertGrosses_793.pdf)
+- Pollstar. "2019 Year End Top 200 Concert Grosses." *Pollstar*, December 2019. [PDF](https://data.pollstar.com/Chart/2019/12/Top200ConcertGrosses_793.pdf)
 - Billboard. "Billboard Hot 100" and "Billboard 200" weekly charts. Compiled by utdata, [rwd-billboard-data](https://github.com/utdata/rwd-billboard-data).
 - Wikimedia Foundation. Pageviews API (Analytics Query Service).
 
