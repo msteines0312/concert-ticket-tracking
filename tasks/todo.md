@@ -53,9 +53,16 @@
   - Former names from filtered Wikipedia redirects + hand-checked aliases; audit in alias_matches.csv
   - 244 of 255 tour artists matched; 212,563 credits (200,904 lead, 11,659 featured)
 - [x] Decide: Spotify Top 200 + Viral 50 (Kaggle, 2017-2021) as a streaming sub-analysis
-- [ ] Matt: create Kaggle API token (saved outside the repo at ~/.kaggle/kaggle.json)
-- [ ] Ingest: Spotify charts, keep US + Canada rows only, match credits with CreditMatcher + tests
-- [ ] Ingest: Wikipedia pageviews per artist (daily, Jul 2015 onward)
+- [x] Matt: create Kaggle API token (new format: ~/.kaggle/access_token, outside the repo)
+- [x] Ingest: Spotify charts, US + Canada only, credits via the same CreditMatcher + tests
+  - 907,336 rows, 2017-01-01 to 2021-12-31, 3-7 missing days per chart (logged)
+  - Featured artists rebuilt from titles ("(feat. X)", "(with X)") so roles match Billboard
+  - 204 of 255 tour artists on Spotify US/CA charts; 458,510 credits (20% featured)
+  - Check: Billboard Hot 100 is 18.6% featured over the same 2017-21 window, so the
+    share is real (streaming-era features), not a parsing error
+- [ ] Ingest: Wikipedia pageviews per artist (daily, Jul 2015 onward) + tests (running)
+  - views_total = current title + all redirects (former names), views_canonical kept separately
+  - Human readers only (agent=user); cache filenames hashed (Windows ignores case)
 - [ ] README: limitations section (TikTok chart 2023-25 paywalled, no Apple Music history,
       Spotify data ends 2021, Hot 100 top-100 cutoff)
 - [ ] Load into SQLite (schema.sql)
