@@ -12,6 +12,9 @@ its own block, to separate charting now (buzz) from having a catalog
 (legacy). The history ladder is the harder test: do signals still help
 after the model knows how the artist's previous tour sold? It only covers
 shows whose artist has a previous tour (40 training tours), so it is thin.
+Room change (Matt's idea) enters that ladder right after history: this room
+vs. the previous tour's typical room, and how that interacts with how full
+the previous tour was.
 
 Two jobs, two tools:
 - Prediction (scikit-learn): plain logistic regression fit on train tours,
@@ -63,12 +66,24 @@ BLOCKS = {
     "pageviews": ["log_pageviews_52w", "pageviews_momentum"],
     "career": ["log_hot100_career_entries", "log_billboard200_career_entries"],
     "history": ["prev_tour_sellout_rate", "prev_tour_fill_rate", "log_prev_tour_price"],
+    "room": ["log2_room_ratio", "room_x_prev_unfilled"],
 }
+
+# Room terms stay in natural units in the explanatory model (per doubling of
+# room size). Standardizing an interaction separately from its parts would
+# make the main effect's coefficient hard to read.
+NATURAL_UNITS = ["log2_room_ratio", "room_x_prev_unfilled"]
 
 LADDERS = {
     "charts_first": ["controls", "charts", "pageviews", "career"],
     "pageviews_first": ["controls", "pageviews", "charts", "career"],
-    "history": ["controls", "history", "charts", "pageviews", "career"],
+    "history": ["controls", "history", "room", "charts", "pageviews", "career"],
+}
+
+# Explanatory fits: the full sample, and the history subset with room change.
+EXPLANATORY = {
+    "all": ("charts_first", ["controls", "charts", "pageviews", "career"]),
+    "history": ("history", ["controls", "history", "room", "charts", "pageviews", "career"]),
 }
 
 TABLES_DIR = PROJECT_ROOT / "reports" / "tables"
@@ -90,6 +105,11 @@ def add_model_columns(dataset):
     out["log_hot100_career_entries"] = np.log1p(out["hot100_lead_entries_career"].fillna(0))
     out["log_billboard200_career_entries"] = np.log1p(out["billboard200_lead_entries_career"].fillna(0))
     out["log_prev_tour_price"] = np.log(out[PRICE_COLUMN])
+    # Coded as the unfilled share (1 - fill), so log2_room_ratio's own
+    # coefficient is the effect of upsizing after a tour that was 100% full,
+    # and the interaction is how much worse upsizing gets per point of the
+    # last tour left unfilled (Matt's choice of interaction).
+    out["room_x_prev_unfilled"] = out["log2_room_ratio"] * (1 - out["prev_tour_fill_rate"])
     return out
 
 
@@ -250,12 +270,13 @@ def run_ladder(dataset, dummies, ladder):
 # Explanation
 # ---------------------------------------------------------------------------
 
-def explanatory_model(dataset, dummies, blocks=("controls", "charts", "pageviews", "career")):
-    """Fit the full model on all splits with year dummies and artist-clustered SEs.
+def explanatory_model(dataset, dummies, ladder, blocks):
+    """Fit a model on all splits with year dummies and artist-clustered SEs.
 
     Continuous predictors are standardized, so each coefficient is the
     change in log-odds of a sellout for a one standard deviation increase
-    (0/1 flags and dummies are left as is, so theirs is yes vs. no).
+    (0/1 flags and dummies are left as is, so theirs is yes vs. no; room
+    terms stay in NATURAL_UNITS). Rows are those usable by `ladder`.
 
     Returns
     -------
@@ -263,12 +284,20 @@ def explanatory_model(dataset, dummies, blocks=("controls", "charts", "pageviews
         Per predictor: block, coef, se, p_value, odds_ratio, ci_low, ci_high
         (odds-ratio scale), plus the number of shows and artist clusters.
     """
-    rows = dataset["split"] != "excluded"
+    rows = ladder_rows(dataset, ladder)
     data = dataset[rows]
     columns = block_columns(list(blocks), dummies.columns)
     X = pd.concat([data, dummies[rows]], axis=1)[columns].astype(float)
+    # A dummy can be all zeros in a subset (no "Other" genre artist has a
+    # previous tour). Its coefficient can't be estimated and makes the fit
+    # singular, so it is dropped and named in the log.
+    constant = [c for c in columns if X[c].nunique() < 2]
+    if constant:
+        logger.info("%s sample: dropping constant predictors %s", ladder, constant)
+        columns = [c for c in columns if c not in constant]
+        X = X[columns]
 
-    continuous = [c for c in columns if X[c].nunique() > 2]
+    continuous = [c for c in columns if X[c].nunique() > 2 and c not in NATURAL_UNITS]
     X[continuous] = (X[continuous] - X[continuous].mean()) / X[continuous].std()
     # Year dummies absorb the rising sellout rate, so the signals aren't
     # credited with whatever changed between 2017 and 2025. The edge years
@@ -312,7 +341,8 @@ def run(dataset_path=DATASET_PATH):
     dataset = add_model_columns(pd.read_csv(dataset_path))
     dummies = control_dummies(dataset)
     ladders = pd.concat([run_ladder(dataset, dummies, name) for name in LADDERS], ignore_index=True)
-    coefficients = explanatory_model(dataset, dummies)
+    coefficients = pd.concat([explanatory_model(dataset, dummies, ladder, blocks).assign(sample=name)
+                              for name, (ladder, blocks) in EXPLANATORY.items()], ignore_index=True)
 
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     ladders.to_csv(TABLES_DIR / "sellout_ladders.csv", index=False)
@@ -321,10 +351,11 @@ def run(dataset_path=DATASET_PATH):
     view = ["ladder", "test_split", "added_block", "test_tours", "auc", "auc_gain",
             "gain_low", "gain_high", "mean_predicted", "actual_rate"]
     logger.info("Ladders:\n%s", ladders[view].round(3).to_string(index=False))
-    logger.info("Explanatory model (%d shows, %d artists):\n%s",
-                coefficients["n_shows"].iloc[0], coefficients["n_artists"].iloc[0],
-                coefficients[["block", "predictor", "odds_ratio", "ci_low", "ci_high", "p_value"]]
-                .round(3).to_string(index=False))
+    for name, table in coefficients.groupby("sample", sort=False):
+        logger.info("Explanatory model, %s (%d shows, %d artists):\n%s", name,
+                    table["n_shows"].iloc[0], table["n_artists"].iloc[0],
+                    table[["block", "predictor", "odds_ratio", "ci_low", "ci_high", "p_value"]]
+                    .round(3).to_string(index=False))
     return ladders, coefficients
 
 

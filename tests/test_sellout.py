@@ -6,6 +6,7 @@ import pytest
 
 from concert_demand.models import sellout
 from concert_demand.models.sellout import (
+    add_model_columns,
     control_dummies,
     ladder_rows,
     run_ladder,
@@ -78,3 +79,12 @@ def test_a_block_that_drives_the_outcome_raises_test_auc(monkeypatch):
     assert controls == pytest.approx(0.5, abs=0.1)
     assert pageviews > 0.9
     assert results.iloc[1]["gain_low"] > 0
+
+
+def test_room_interaction_is_zero_after_a_full_tour():
+    data = pd.DataFrame({"hot100_lead_entries_career": [0, 0], "billboard200_lead_entries_career": [0, 0],
+                         "prev_tour_price_2024usd": [100.0, 100.0], "log2_room_ratio": [1.0, 1.0],
+                         "prev_tour_fill_rate": [1.0, 0.9]})
+    out = add_model_columns(data)
+    # Doubling after a 100%-full tour: only the main effect applies.
+    assert out["room_x_prev_unfilled"].tolist() == pytest.approx([0.0, 0.1])

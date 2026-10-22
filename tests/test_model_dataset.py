@@ -16,9 +16,10 @@ CPI = pd.DataFrame({"year": [2014, 2016, 2018, 2024], "cpi_u": [200.0, 200.0, 20
 
 
 def _engagement(tour, first, last=None, sold_out=1, revenue=1000.0, tickets=10, artist="Act",
-                fill_rate=1.0, **flags):
+                fill_rate=1.0, capacity_per_show=10000, **flags):
     row = {"artist": artist, "tour": tour, "first_date": pd.Timestamp(first),
            "last_date": pd.Timestamp(last or first), "sold_out": sold_out, "fill_rate": fill_rate,
+           "capacity_per_show": capacity_per_show,
            "revenue_usd": revenue, "tickets_sold": tickets, "is_festival": 0,
            "suspect_capacity": 0, "conflicting_sources": 0, "covid_era": "pre"}
     row.update(flags)
@@ -108,6 +109,13 @@ def test_fill_rate_separates_near_misses_from_flops():
     result = previous_tour_history(pd.DataFrame([_show()]), history).iloc[0]
     assert result["prev_tour_sellout_rate"] == 0
     assert result["prev_tour_fill_rate"] == pytest.approx(0.96)
+
+
+def test_previous_room_is_the_median_so_a_few_stadiums_dont_count():
+    history = _history(_tour_run("Arena Tour", "2016-01-01", 4, capacity_per_show=15000)
+                       + _tour_run("Arena Tour", "2016-03-01", 2, capacity_per_show=60000))
+    result = previous_tour_history(pd.DataFrame([_show()]), history).iloc[0]
+    assert result["prev_tour_room"] == 15000
 
 
 def test_flagged_and_shutdown_rows_are_not_history():

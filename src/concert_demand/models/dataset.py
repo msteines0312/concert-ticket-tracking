@@ -29,6 +29,8 @@ fill rate are kept, since a 96%-full show and a 60%-full show are both "not
 sold out". The previous tour's average ticket price is converted to
 constant dollars, because same-show price leaks the outcome (sellouts push
 it up) but the previous tour's price was set before this show went on sale.
+The previous tour's typical room (median capacity per show) is kept so the
+models can ask whether moving an act into a bigger room than last time hurts.
 
 Usage
 -----
@@ -125,16 +127,18 @@ def usable_history(engagements, cpi_annual):
 
 
 def summarize_tour(tour_shows):
-    """Sellout rate, fill rate and average real ticket price over one tour's shows.
+    """Sellout rate, fill rate, typical room and average real price over one tour's shows.
 
     Price is total revenue over total tickets (so big engagements weigh
-    more), using only rows that report both.
+    more), using only rows that report both. The typical room is the
+    median capacity per show, so a few stadium dates on an arena tour
+    don't make the act look like a stadium act (Matt's pick).
 
     Returns
     -------
     dict
-        prev_tour_shows, prev_tour_sellout_rate, prev_tour_fill_rate, and
-        the price column.
+        prev_tour_shows, prev_tour_sellout_rate, prev_tour_fill_rate,
+        prev_tour_room, and the price column.
     """
     priced = tour_shows[tour_shows["revenue_real"].notna() & (tour_shows["tickets_sold"] > 0)]
     price = (priced["revenue_real"].sum() / priced["tickets_sold"].sum()
@@ -142,6 +146,7 @@ def summarize_tour(tour_shows):
     return {"prev_tour_shows": len(tour_shows),
             "prev_tour_sellout_rate": tour_shows["sold_out"].mean(),
             "prev_tour_fill_rate": tour_shows["fill_rate"].mean(),
+            "prev_tour_room": tour_shows["capacity_per_show"].median(),
             PRICE_COLUMN: price}
 
 
@@ -249,6 +254,9 @@ def build_model_dataset(shows, engagements, cpi_annual):
     history = previous_tour_history(dataset, usable_history(engagements, cpi_annual))
     dataset = dataset.merge(history, on="engagement_id", how="left", validate="one_to_one")
     dataset["has_prev_tour"] = dataset["prev_tour"].notna().astype(int)
+    # Matt's room-change idea: this room vs. the previous tour's typical
+    # room. log2, so 1 = twice the size, -1 = half.
+    dataset["log2_room_ratio"] = np.log2(dataset["capacity_per_show"] / dataset["prev_tour_room"])
     dataset["split"] = assign_split(dataset)
     return dataset
 

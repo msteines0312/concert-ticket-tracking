@@ -220,3 +220,10 @@ I accepted the AI's recommendation on each of these after comparing the options:
 
 **Outcome.** One fix came up during the build: the explanatory model failed to converge. The AI traced it to 2016 (1 show) and 2026 (11 shows, one artist), where every show sold out, which makes the best-fitting year coefficient infinitely large. Those years were folded into 2017 and 2025, and the code now stops with an error if the fit doesn't converge instead of reporting unreliable numbers.
 
+## 30. Room size compared with the artist's last tour
+**My call.** The first sellout models showed that chart and pageview signals barely improve on the controls (test AUC 0.52 to 0.62), even though differences between tours could in principle explain far more (about 0.91 if you cheat and use each tour's own sellout rate). Of the options the AI laid out, I chose to test whether the room relative to the artist's previous tour is the missing piece, building on my one-hit finding that breakout acts were booked into rooms 1.69 times their usual size.
+
+**What the data showed first.** The raw pattern runs the opposite way from overbooking: shows in rooms 2.5 times or more the previous tour's size sold out the most (86.5%). Buyers upsize acts they have watched grow, so the raw ratio mostly measures the buyer's confidence. The AI recommended measuring upsizing together with how full the previous tour was, and I accepted that, plus using the previous tour's median room so a few stadium dates don't make an arena act look bigger.
+
+**Outcome.** The room terms don't improve predictions on held-out tours. They do explain a clear pattern across all years: doubling the room raises the odds of a sellout by about 40% after a tour that was 100% full, and lowers them by about 27% after a tour that was 90% full, with the break-even near 95% full. Shows moved into a room twice as big after a tour that was under 95% full sold out 63% of the time, against 89% when the last tour was nearly full (Halsey's Love and Power Tour: last tour 83% full, 0 of 16 sold out). The pattern rests on only 10 tours, so it needs a robustness check before it goes in the brief.
+
