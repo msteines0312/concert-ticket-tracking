@@ -36,8 +36,8 @@ def _pageviews(start, end, views=10, views_es=0, artist="Artist A"):
     return pd.DataFrame({"artist": artist, "date": days, "views_total": views, "views_es": views_es})
 
 
-def _spotify(day, streams=1000, chart="top200", artist="Artist A"):
-    return {"artist": artist, "chart": chart, "date": pd.Timestamp(day), "streams": streams}
+def _spotify(day, streams=1000, chart="top200", role="lead", artist="Artist A"):
+    return {"artist": artist, "chart": chart, "date": pd.Timestamp(day), "streams": streams, "role": role}
 
 
 @pytest.fixture
@@ -110,8 +110,8 @@ def test_pageviews_mean_and_momentum(inputs):
 
 def test_spotify_counts_streams_inside_the_data(inputs):
     features = build_features(*inputs).iloc[0]
-    assert features["spotify_streams_13w"] == 1000
-    assert features["spotify_streams_52w"] == 1000
+    assert features["spotify_lead_streams_13w"] == 1000
+    assert features["spotify_lead_streams_52w"] == 1000
 
 
 def test_spotify_is_null_when_window_starts_before_the_data(inputs):
@@ -120,8 +120,8 @@ def test_spotify_is_null_when_window_starts_before_the_data(inputs):
     # the 52w window starts in mid-2016, before it
     early = shows.assign(first_date=pd.Timestamp("2017-12-01"))
     features = build_features(early, credits, pageviews, spotify).iloc[0]
-    assert features["spotify_streams_13w"] == 0
-    assert np.isnan(features["spotify_streams_52w"])
+    assert features["spotify_lead_streams_13w"] == 0
+    assert np.isnan(features["spotify_lead_streams_52w"])
 
 
 def test_pageviews_add_spanish_views_and_keep_an_english_only_version(inputs):
@@ -130,3 +130,49 @@ def test_pageviews_add_spanish_views_and_keep_an_english_only_version(inputs):
     features = build_features(shows, credits, pageviews, spotify).iloc[0]
     assert features["pageviews_mean_52w"] == pytest.approx(40)
     assert features["pageviews_en_mean_52w"] == pytest.approx(10)
+
+
+def test_top10_weeks_count_only_ranks_ten_and_better(inputs):
+    features = build_features(*inputs).iloc[0]
+    assert features["hot100_lead_top10_52w"] == 1          # the #1, not the #50
+    assert features["billboard200_lead_top10_13w"] == 0    # #200 isn't a top-10 week
+
+
+def test_chart_momentum_is_zero_when_activity_is_steady():
+    shows = pd.DataFrame({"engagement_id": [1], "artist": ["Artist A"], "first_date": [SHOW_DATE]})
+    # One #1 week every 4 weeks for a year: the last 13 weeks look like the year
+    weeks = pd.date_range(CUTOFF - pd.Timedelta(weeks=52), CUTOFF - pd.Timedelta(days=1), freq="28D")
+    credits = pd.DataFrame([_credit(week) for week in weeks])
+    features = build_features(shows, credits, _pageviews("2015-07-01", "2019-12-31"),
+                              pd.DataFrame([_spotify("2018-12-01")])).iloc[0]
+    assert abs(features["hot100_lead_momentum"]) < 0.25
+
+
+def test_spotify_keeps_lead_and_featured_streams_apart(inputs):
+    shows, credits, pageviews, _ = inputs
+    spotify = pd.DataFrame([_spotify("2018-12-01", streams=1000),
+                            _spotify("2018-12-02", streams=50, role="featured")])
+    features = build_features(shows, credits, pageviews, spotify).iloc[0]
+    assert features["spotify_lead_streams_13w"] == 1000
+    assert features["spotify_featured_streams_13w"] == 50
+
+
+def test_co_headlined_show_uses_the_stronger_act_whole():
+    shows = pd.DataFrame({"engagement_id": [7], "artist": ["Small Act"], "first_date": [SHOW_DATE],
+                          "co_headliners": ["Big Act"]})
+    pageviews = pd.concat([_pageviews("2015-07-01", "2019-12-31", views=10, artist="Small Act"),
+                           _pageviews("2015-07-01", "2019-12-31", views=500, artist="Big Act")])
+    # The weaker act has the chart hit: a per-column max would wrongly mix it in
+    credits = pd.DataFrame([_credit("2018-12-01", artist="Small Act")])
+    spotify = pd.DataFrame([_spotify("2018-12-01", artist="Small Act")])
+    features = build_features(shows, credits, pageviews, spotify)
+    assert len(features) == 1
+    row = features.iloc[0]
+    assert (row["artist"], row["signal_artist"]) == ("Small Act", "Big Act")
+    assert row["pageviews_mean_52w"] == pytest.approx(500)
+    assert row["hot100_lead_entries_52w"] == 0
+
+
+def test_solo_show_signals_belong_to_the_headliner(inputs):
+    features = build_features(*inputs).iloc[0]
+    assert features["signal_artist"] == features["artist"] == "Artist A"

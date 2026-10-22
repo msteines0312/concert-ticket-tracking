@@ -16,20 +16,29 @@ Windows end at the cutoff and look back 13, 26 or 52 weeks:
 Signals per window
 ------------------
 - Billboard, separately for the Hot 100 and Billboard 200 and for lead and
-  featured credits: entries (song-weeks on the chart) and points, where a
-  #1 earns chart_size points and the last position earns 1. Points reward
-  ranking high, not just being on the chart.
+  featured credits: entries (song-weeks on the chart), points, where a
+  #1 earns chart_size points and the last position earns 1, and top-10
+  weeks. Points reward ranking high; top-10 weeks give real hits extra
+  weight on top of the linear points.
 - Billboard best rank, any role.
 - Wikipedia pageviews: mean daily views, English + Spanish Wikipedia
   (current title + former names on each). English alone undercounted Latin
   artists, whose fans often read the Spanish article. An English-only
   52-week version is kept for robustness checks.
 - Spotify US + Canada (2017-2021 sub-analysis): Top 200 streams and Viral 50
-  entries, lead and featured credits together (a feature earns the song's
-  full streams). Null when the window isn't fully inside the Spotify data.
+  entries, split into lead and featured credits like Billboard. Null when
+  the window isn't fully inside the Spotify data.
 
-Plus career totals (all Billboard history before the cutoff) and a
-pageview momentum ratio comparing the last 13 weeks to the last 52.
+Plus career totals (all Billboard history before the cutoff) and momentum
+ratios comparing the last 13 weeks to the last 52, for pageviews and for
+lead chart points on each chart.
+
+Co-headlined shows use the stronger act's signals: every co-headliner's
+features are built, and the show takes the full feature set of the act
+with more pageviews (career chart weeks when pageviews aren't available).
+Taking the whole set, rather than the best value per column, avoids
+blending two artists into one that doesn't exist. `signal_artist` records
+whose signals were used.
 
 Usage
 -----
@@ -135,10 +144,12 @@ def chart_signals(shows, credits):
             events = on_chart[on_chart["role"] == role].sort_values("chart_week")
             dates = events["chart_week"].to_numpy()
             points = (size + 1 - events["rank"]).to_numpy()
+            top10 = (events["rank"] <= 10).to_numpy(dtype=float)
             for weeks in WINDOW_WEEKS:
                 starts, ends = _windows(shows["cutoff"], weeks)
                 features[f"{chart}_{role}_entries_{weeks}w"] = window_sums(dates, np.ones(len(dates)), starts, ends)
                 features[f"{chart}_{role}_points_{weeks}w"] = window_sums(dates, points, starts, ends)
+                features[f"{chart}_{role}_top10_{weeks}w"] = window_sums(dates, top10, starts, ends)
             # Career depth: every entry before the cutoff, back to the chart's start
             features[f"{chart}_{role}_entries_career"] = window_sums(
                 dates, np.ones(len(dates)), np.full(len(shows), np.datetime64("1900-01-01")),
@@ -149,6 +160,11 @@ def chart_signals(shows, credits):
             starts, ends = _windows(shows["cutoff"], weeks)
             features[f"{chart}_best_rank_{weeks}w"] = window_min(
                 events["chart_week"].to_numpy(), events["rank"].to_numpy(), starts, ends)
+
+        # Momentum, as for pageviews. Points are totals, not averages, so the
+        # 13-week total is scaled by 4 to compare with 52 weeks. 0 = steady.
+        features[f"{chart}_lead_momentum"] = np.log(
+            (4 * features[f"{chart}_lead_points_13w"] + 1) / (features[f"{chart}_lead_points_52w"] + 1))
     return pd.DataFrame(features, index=shows.index)
 
 
@@ -185,16 +201,19 @@ def spotify_signals(shows, spotify):
     Null unless the whole window lies inside the 2017-2021 Spotify data, so
     a partly covered window can't look like a quiet stretch.
     """
-    top200 = spotify[spotify["chart"] == "top200"].sort_values("date")
-    viral = spotify[spotify["chart"] == "viral50"].sort_values("date")
     features = {}
-    for weeks in WINDOW_WEEKS:
-        starts, ends = _windows(shows["cutoff"], weeks)
-        covered = (starts >= np.datetime64(SPOTIFY_START)) & (ends <= np.datetime64(SPOTIFY_END + pd.Timedelta(days=1)))
-        streams = window_sums(top200["date"].to_numpy(), top200["streams"].to_numpy(), starts, ends)
-        viral_entries = window_sums(viral["date"].to_numpy(), np.ones(len(viral)), starts, ends)
-        features[f"spotify_streams_{weeks}w"] = np.where(covered, streams, np.nan)
-        features[f"spotify_viral_entries_{weeks}w"] = np.where(covered, viral_entries, np.nan)
+    for role in ["lead", "featured"]:
+        credited = spotify[spotify["role"] == role]
+        top200 = credited[credited["chart"] == "top200"].sort_values("date")
+        viral = credited[credited["chart"] == "viral50"].sort_values("date")
+        for weeks in WINDOW_WEEKS:
+            starts, ends = _windows(shows["cutoff"], weeks)
+            covered = ((starts >= np.datetime64(SPOTIFY_START))
+                       & (ends <= np.datetime64(SPOTIFY_END + pd.Timedelta(days=1))))
+            streams = window_sums(top200["date"].to_numpy(), top200["streams"].to_numpy(), starts, ends)
+            viral_entries = window_sums(viral["date"].to_numpy(), np.ones(len(viral)), starts, ends)
+            features[f"spotify_{role}_streams_{weeks}w"] = np.where(covered, streams, np.nan)
+            features[f"spotify_{role}_viral_entries_{weeks}w"] = np.where(covered, viral_entries, np.nan)
     return pd.DataFrame(features, index=shows.index)
 
 
@@ -202,13 +221,54 @@ def spotify_signals(shows, spotify):
 # Assemble
 # ---------------------------------------------------------------------------
 
+def candidate_acts(shows):
+    """One row per (show, act) pair: the headliner plus any co-headliners.
+
+    Parameters
+    ----------
+    shows : pandas.DataFrame
+        Must have engagement_id and artist; co_headliners is optional
+        (semicolon-separated names).
+
+    Returns
+    -------
+    pandas.DataFrame
+        The show columns with `artist` replaced by each candidate act and
+        `headliner` holding the listed artist.
+    """
+    co = shows["co_headliners"] if "co_headliners" in shows else pd.Series(None, index=shows.index)
+    # Blank cells are NaN (a float), not None, so check the type explicitly
+    acts = [[artist] + [name.strip() for name in (cell if isinstance(cell, str) else "").split(";")
+                        if name.strip() and name.strip() != artist]
+            for artist, cell in zip(shows["artist"], co)]
+    expanded = shows.assign(headliner=shows["artist"], artist=acts).explode("artist")
+    return expanded.reset_index(drop=True)
+
+
+def pick_stronger_act(candidates):
+    """Keep one row per show: the act with the stronger popularity signal.
+
+    Strength is 52-week pageviews. Where those are missing (windows before
+    July 2015), career chart weeks on both charts decide instead. Ties keep
+    the listed headliner, since candidates are ordered headliner first.
+    """
+    career = candidates["hot100_lead_entries_career"] + candidates["billboard200_lead_entries_career"]
+    has_views = candidates.groupby("engagement_id")["pageviews_mean_52w"].transform(
+        lambda views: views.notna().all())
+    strength = np.where(has_views, candidates["pageviews_mean_52w"], career)
+    order = candidates.assign(_strength=strength, _position=range(len(candidates)))
+    order = order.sort_values(["engagement_id", "_strength", "_position"], ascending=[True, False, True])
+    return order.drop_duplicates("engagement_id").drop(columns=["_strength", "_position"])
+
+
 def build_features(shows, credits, pageviews, spotify, cutoff_days=CUTOFF_DAYS):
     """Compute every signal for every show.
 
     Parameters
     ----------
     shows : pandas.DataFrame
-        engagement_id, artist, first_date (datetime).
+        engagement_id, artist, first_date (datetime), and optionally
+        co_headliners.
     credits, pageviews, spotify : pandas.DataFrame
         All artists' rows, with datetime date columns.
     cutoff_days : int
@@ -217,9 +277,11 @@ def build_features(shows, credits, pageviews, spotify, cutoff_days=CUTOFF_DAYS):
     Returns
     -------
     pandas.DataFrame
-        One row per show: engagement_id, artist, show_date, cutoff_date,
-        in_model_window, then every signal.
+        One row per show, in input order: engagement_id, artist (the listed
+        headliner), signal_artist (whose signals are used), show_date,
+        cutoff_date, in_model_window, then every signal.
     """
+    shows = candidate_acts(shows)
     shows = shows.assign(cutoff=shows["first_date"] - pd.Timedelta(days=cutoff_days))
     by_artist = {
         "credits": dict(tuple(credits.groupby("artist"))),
@@ -243,26 +305,30 @@ def build_features(shows, credits, pageviews, spotify, cutoff_days=CUTOFF_DAYS):
     primary_start = shows["cutoff"] - pd.Timedelta(weeks=PRIMARY_WINDOW_WEEKS)
     meta = pd.DataFrame({
         "engagement_id": shows["engagement_id"],
-        "artist": shows["artist"],
+        "artist": shows["headliner"],
+        "signal_artist": shows["artist"],
         "show_date": shows["first_date"].dt.strftime("%Y-%m-%d"),
         "cutoff_date": shows["cutoff"].dt.strftime("%Y-%m-%d"),
         # True when the 52-week pageview window is fully covered
         "in_model_window": (primary_start >= PAGEVIEWS_START).astype(int),
     })
-    return pd.concat([meta, signals], axis=1)
+    chosen = pick_stronger_act(pd.concat([meta, signals], axis=1))
+    # Back to one row per show, in the original order
+    order = pd.Index(shows["engagement_id"].drop_duplicates())
+    return chosen.set_index("engagement_id").loc[order].reset_index()
 
 
 def load_inputs(connection):
     """Read shows and event tables from the database, with parsed dates."""
     shows = pd.read_sql(
-        "SELECT engagement_id, artist, first_date FROM engagements "
+        "SELECT engagement_id, artist, co_headliners, first_date FROM engagements "
         "WHERE artist IS NOT NULL AND first_date IS NOT NULL", connection,
         parse_dates=["first_date"])
     credits = pd.read_sql("SELECT artist, chart, chart_week, rank, role FROM chart_credits",
                           connection, parse_dates=["chart_week"])
     pageviews = pd.read_sql("SELECT artist, date, views_total, views_es FROM pageviews_daily",
                             connection, parse_dates=["date"])
-    spotify = pd.read_sql("SELECT artist, chart, date, streams FROM spotify_credits "
+    spotify = pd.read_sql("SELECT artist, chart, date, streams, role FROM spotify_credits "
                           "WHERE region IN ('United States', 'Canada')", connection,
                           parse_dates=["date"])
     return shows, credits, pageviews, spotify
