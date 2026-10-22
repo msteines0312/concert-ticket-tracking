@@ -1,5 +1,20 @@
 """Robustness checks for the Phase 2 models.
 
+Signal checks (the list Matt set in Phases 1 and 2): each reruns the
+controls-only and full sellout models with one thing changed, and records
+how much the signals add (full AUC minus controls AUC, paired by tour):
+- sellout_97: a show counts as sold out at 97% full, not only 100%
+  (the Pollstar check showed Wikipedia rounds some 96-99% shows up)
+- show_date_cutoff: signals measured on the show date, not six months before
+- english_pageviews: English Wikipedia only, no Spanish
+- window_26w: 26-week chart and pageview windows instead of 52. Matt's rule:
+  keep 26w only if it beats 52w on an inner time split of the training
+  years (fit on tours starting before 2018, score tours starting in 2018)
+- worldwide: every country, not only the US + Canada
+- artist_cv: 5-fold cross-validation grouped by artist (each artist is only
+  ever in train or test), all years pooled, no time order
+The nights leakage check lives in the sellout ladders (nights_leakage).
+
 Leave one tour out (Matt's call, 2026-10-21): the room-change finding
 (upsizing hurts after a tour that wasn't nearly full) rests on about 10
 tours, so the history-sample explanatory model is refit once per tour with
@@ -12,17 +27,199 @@ Usage
 """
 
 import logging
+import sqlite3
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import GroupKFold
 
+from concert_demand.ingest.cpi import load_annual
+from concert_demand.load_db import DB_PATH
 from concert_demand.models import sellout
 from concert_demand.models.dataset import OUTPUT_PATH as DATASET_PATH
+from concert_demand.models.dataset import add_signal_transforms, build_model_dataset
+from concert_demand.paths import PROCESSED_DIR
 
 ROOM_MAIN, ROOM_INTERACTION = sellout.NATURAL_UNITS
+FULL_BLOCKS = ["controls", "charts", "pageviews", "career"]
+INNER_TRAIN_END = pd.Timestamp("2018-01-01")   # window check: fit before, score after
+N_FOLDS = 5
+
+# Raw signal columns that the swaps below replace; the model columns are
+# rebuilt from them, so every transform stays the same.
+RAW_SIGNALS = ["hot100_lead_points_52w", "billboard200_lead_points_52w", "pageviews_mean_52w",
+               "pageviews_en_mean_52w", "hot100_lead_momentum", "pageviews_momentum",
+               "hot100_lead_entries_career", "billboard200_lead_entries_career"]
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Signal checks
+# ---------------------------------------------------------------------------
+
+def scored_row(check, test_name, scored, predictions):
+    """One summary row from controls and full predictions on the same shows."""
+    y = scored["sold_out"].to_numpy()
+    interval = sellout.tour_bootstrap_auc(y, predictions, scored["tour"].to_numpy()).iloc[1]
+    controls = roc_auc_score(y, predictions["controls"])
+    full = roc_auc_score(y, predictions["full"])
+    return {"check": check, "test": test_name, "shows": len(scored),
+            "tours": scored["tour"].nunique(), "sellout_rate": y.mean(),
+            "auc_controls": controls, "auc_full": full, "signal_gain": full - controls,
+            "gain_low": interval["gain_low"], "gain_high": interval["gain_high"]}
+
+
+def model_columns(dummies):
+    """Predictors of the controls-only and full models."""
+    return {"controls": sellout.block_columns(["controls"], dummies.columns),
+            "full": sellout.block_columns(FULL_BLOCKS, dummies.columns)}
+
+
+def signal_gain(check, data, dummies, train, tests):
+    """Fit both models on `train` and score each test mask.
+
+    Parameters
+    ----------
+    check : str
+    data : pandas.DataFrame
+        Model columns, already limited to the sample.
+    dummies : pandas.DataFrame
+        Control dummies covering `data`'s index.
+    train : pandas.Series of bool
+    tests : dict of str -> pandas.Series of bool
+
+    Returns
+    -------
+    list of dict
+    """
+    frame = pd.concat([data, dummies.loc[data.index]], axis=1)
+    rows = []
+    for name, test in tests.items():
+        fit, score = frame[train], frame[test]
+        predictions = {step: sellout.fit_predict(fit[cols], fit["sold_out"], score[cols])
+                       for step, cols in model_columns(dummies).items()}
+        rows.append(scored_row(check, name, score, predictions))
+    return rows
+
+
+def time_split_gain(check, dataset, dummies):
+    """The main design: fit on train tours, score test_2019 and holdout_post."""
+    data = dataset[sellout.ladder_rows(dataset, "charts_first")]
+    tests = {split: data["split"] == split for split in sellout.TEST_SPLITS}
+    return signal_gain(check, data, dummies, data["split"] == "train", tests)
+
+
+def inner_time_gain(check, dataset, dummies):
+    """Within the training years: fit on tours starting before 2018, score the rest."""
+    data = dataset[sellout.ladder_rows(dataset, "charts_first") & (dataset["split"] == "train")]
+    tour_start = pd.to_datetime(data["first_date"]).groupby(data["tour"]).transform("min")
+    early = tour_start < INNER_TRAIN_END
+    return signal_gain(check, data, dummies, early, {"inner_2018": ~early})
+
+
+def artist_cv_gain(dataset, dummies):
+    """Pooled out-of-fold AUC from cross-validation grouped by artist."""
+    data = dataset[sellout.ladder_rows(dataset, "charts_first")]
+    frame = pd.concat([data, dummies.loc[data.index]], axis=1)
+    columns = model_columns(dummies)
+    predictions = {step: np.zeros(len(frame)) for step in columns}
+    for fit_idx, score_idx in GroupKFold(n_splits=N_FOLDS).split(frame, groups=frame["artist"]):
+        fit, score = frame.iloc[fit_idx], frame.iloc[score_idx]
+        for step, cols in columns.items():
+            predictions[step][score_idx] = sellout.fit_predict(fit[cols], fit["sold_out"], score[cols])
+    return [scored_row("artist_cv", f"{N_FOLDS}_fold_pooled", frame, predictions)]
+
+
+def swap_signals(dataset, replacement):
+    """Replace raw signal columns and rebuild every model column from them.
+
+    Parameters
+    ----------
+    dataset : pandas.DataFrame
+    replacement : pandas.DataFrame
+        engagement_id plus any of RAW_SIGNALS.
+    """
+    swapped = dataset.drop(columns=[c for c in replacement if c != "engagement_id"])
+    swapped = swapped.merge(replacement, on="engagement_id", how="left", validate="one_to_one")
+    swapped.index = dataset.index   # keep alignment with the control dummies
+    return sellout.add_model_columns(add_signal_transforms(swapped))
+
+
+def worldwide_dataset(db_path=DB_PATH):
+    """The model dataset rebuilt without the US + Canada filter.
+
+    Countries outside the US, Canada and Puerto Rico are pooled into one
+    control level, since most have too few shows to get their own.
+    """
+    signals = ", ".join(f"f.{c}" for c in RAW_SIGNALS)
+    query = (
+        f"SELECT e.*, f.cutoff_date, f.signal_artist, {signals}, a.genre_group "
+        "FROM engagements AS e JOIN show_features AS f USING (engagement_id) "
+        "LEFT JOIN artists AS a ON a.artist = e.artist "
+        "WHERE e.artist IS NOT NULL AND e.first_date IS NOT NULL AND e.is_festival = 0 "
+        "AND e.suspect_capacity = 0 AND e.conflicting_sources = 0 AND e.is_package_tour = 0 "
+        "AND f.in_model_window = 1")
+    with sqlite3.connect(db_path) as connection:
+        shows = pd.read_sql(query, connection, parse_dates=["first_date", "last_date", "cutoff_date"])
+        engagements = pd.read_sql("SELECT * FROM engagements", connection,
+                                  parse_dates=["first_date", "last_date"])
+    # Same tiers as the model_sample view in sql/analysis_views.sql.
+    shows["venue_size"] = np.select(
+        [shows["capacity_per_show"] < 5000, shows["capacity_per_show"] <= 20000],
+        ["1. Under 5K (clubs, theaters)", "2. 5K-20K (arenas, amphitheaters)"],
+        default="3. Over 20K (stadiums)")
+    local = ["United States", "Canada", "Puerto Rico"]
+    shows["country"] = shows["country"].where(shows["country"].isin(local), "Outside US/Canada")
+    return sellout.add_model_columns(build_model_dataset(shows, engagements, load_annual()))
+
+
+def run_signal_checks(dataset, dummies):
+    """Run every signal check.
+
+    Returns
+    -------
+    tuple of (pandas.DataFrame, dict)
+        The summary table, and the room effect under the 97% definition.
+    """
+    rows = time_split_gain("main", dataset, dummies)
+    rows += inner_time_gain("main", dataset, dummies)
+
+    strict = dataset.assign(sold_out=(dataset["fill_rate"] >= 0.97).astype(int))
+    rows += time_split_gain("sellout_97", strict, dummies)
+
+    show_date = pd.read_csv(PROCESSED_DIR / "show_features_show_date.csv",
+                            usecols=["engagement_id"] + RAW_SIGNALS)
+    rows += time_split_gain("show_date_cutoff", swap_signals(dataset, show_date), dummies)
+
+    english = dataset[["engagement_id", "pageviews_en_mean_52w"]].rename(
+        columns={"pageviews_en_mean_52w": "pageviews_mean_52w"})
+    rows += time_split_gain("english_pageviews", swap_signals(dataset, english), dummies)
+
+    # 26-week windows go into the 52-week column names so the model code is
+    # unchanged; momentum (13 vs 52 weeks) is left as is.
+    windows = pd.read_csv(PROCESSED_DIR / "show_features.csv", usecols=[
+        "engagement_id", "hot100_lead_points_26w", "billboard200_lead_points_26w",
+        "pageviews_mean_26w"])
+    windows.columns = [c.replace("_26w", "_52w") for c in windows.columns]
+    short = swap_signals(dataset, windows)
+    rows += inner_time_gain("window_26w", short, dummies)
+    rows += time_split_gain("window_26w", short, dummies)
+
+    world = worldwide_dataset()
+    rows += time_split_gain("worldwide", world, sellout.control_dummies(world))
+
+    rows += artist_cv_gain(dataset, dummies)
+
+    _, blocks = sellout.EXPLANATORY["history"]
+    room_97 = room_effect(sellout.explanatory_model(strict, dummies, "history", blocks))
+    return pd.DataFrame(rows), room_97
+
+
+# ---------------------------------------------------------------------------
+# Leave one tour out (room finding)
+# ---------------------------------------------------------------------------
 
 def room_effect(coefficients):
     """Pull the room terms out of an explanatory-model table.
@@ -68,15 +265,8 @@ def leave_one_tour_out(dataset, dummies, ladder="history"):
     return pd.DataFrame(rows)
 
 
-def run(dataset_path=DATASET_PATH):
-    """Run the leave-one-tour-out check and save it."""
-    dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
-    dummies = sellout.control_dummies(dataset)
-    results = leave_one_tour_out(dataset, dummies)
-
-    sellout.TABLES_DIR.mkdir(parents=True, exist_ok=True)
-    results.to_csv(sellout.TABLES_DIR / "room_leave_one_tour_out.csv", index=False)
-
+def log_leave_one_out(results):
+    """Summarize the leave-one-tour-out refits in the log."""
     drops = results.iloc[1:]
     failed = drops["error"].notna() if "error" in drops else pd.Series(False, index=drops.index)
     # A refit can fail when dropping a tour leaves a year where every show
@@ -95,7 +285,28 @@ def run(dataset_path=DATASET_PATH):
     logger.info("Most influential tours:\n%s", most_influential[
         ["dropped_tour", "dropped_shows", "room_main", "room_interaction",
          "interaction_p", "break_even_fill"]].round(4).to_string(index=False))
-    return results
+
+
+# ---------------------------------------------------------------------------
+# Run
+# ---------------------------------------------------------------------------
+
+def run(dataset_path=DATASET_PATH):
+    """Run the signal checks and the leave-one-tour-out check; save both."""
+    dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
+    dummies = sellout.control_dummies(dataset)
+    sellout.TABLES_DIR.mkdir(parents=True, exist_ok=True)
+
+    summary, room_97 = run_signal_checks(dataset, dummies)
+    summary.to_csv(sellout.TABLES_DIR / "robustness_signal_checks.csv", index=False)
+    logger.info("Signal checks:\n%s", summary.round(3).to_string(index=False))
+    logger.info("Room effect, 97%% sellout definition: %s",
+                {key: round(value, 4) for key, value in room_97.items()})
+
+    results = leave_one_tour_out(dataset, dummies)
+    results.to_csv(sellout.TABLES_DIR / "room_leave_one_tour_out.csv", index=False)
+    log_leave_one_out(results)
+    return summary, results
 
 
 def main():
