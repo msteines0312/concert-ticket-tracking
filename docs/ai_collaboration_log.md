@@ -184,3 +184,22 @@ I accepted the AI's recommendations on how to fix each one.
 **Outcome.** The full pipeline was rebuilt from scratch in order (database, features, one-hit flags, views, production labels) and reproduced every number; all 263 tests pass. A sweep of the repo against my rules found two leftover em dashes, one in a test's simulated OCR noise and one in quoted Wikipedia text, both removed. No commit uses a Co-Authored-By line or a conventional-commit prefix, and the notebook's outputs are cleared. The README limitations section is drafted with every number checked against the data, for me to rewrite in my own voice. Two items are mine to finish: rewriting that section, and blind-labeling the 40-tour production sample so the agreement with Claude's labels can be measured.
 
 **Source list (my call).** The list of every Wikipedia article used, with the exact revision read, was being written to the ignored data folder, so it wasn't visible on GitHub even though the README promises it. I had it moved to `docs/wikipedia_sources.csv`, where it's published with the code and linked from the README.
+
+## 26. Phase 2 evaluation design
+**Context.** The model sample has 5,806 shows but only 240 tours from 162 artists, and shows on one tour are close to copies of each other. A random split would let the model see a tour's other nights during training, so the evaluation had to be designed before any model was fit.
+
+- **Split (my pick):** the AI recommended a time split by tour (train on tours starting 2017-18, test on 2019, with 2022-25 as a second holdout). I chose to add an artist-grouped check on top, so the results also show whether the model works on artists it has never seen.
+- **Baselines (accepted):** a signal only counts as working if it improves on a controls-only model. A harder second test adds the artist's previous-tour sellout rate, which answers whether a buyer could just look at last tour's numbers instead.
+- **Ticket price (accepted, refining my entry 23 rule):** same-show price is revenue divided by tickets sold, so sellouts push it up mechanically. The main model uses the artist's previous-tour price, which is known at booking. My with/without test still runs on same-show price, as a demonstration of how much it leaks.
+- **Explain vs. predict (accepted):** both. Coefficients come from statsmodels with standard errors clustered by artist, so they are honest about the small number of artists; out-of-sample scoring uses scikit-learn.
+
+## 27. Model inputs
+I went through a second batch of choices about what goes into the models. I accepted the AI's recommendation on each after comparing the options:
+
+- **Controls:** log capacity per show, venue size, genre group and country in the main model. Production level and set length are tested as a separate block, since 149 of 240 tours have no production description and that gap mostly reflects how much attention a tour got on Wikipedia.
+- **Year trend:** the sellout rate rises from 51% in 2017 to 83% in 2019, and a year dummy can't predict a year it never saw. The predictive model has no year term and is judged mainly on ranking (AUC), with the calibration gap reported. The explanatory model is fit on all years with year dummies.
+- **Not charting:** a charted yes/no flag plus log(1 + chart points). Best rank is dropped because points already capture height and duration.
+- **Tours that straddle COVID:** 9 tours started before the shutdown and kept going after it (180 shows). Their post-shutdown shows are left out of training and testing, so the pre-COVID splits stay pre-COVID, but they still count in the COVID comparison.
+- **Number of nights:** left out of the main model, because buyers often add nights after the first one sells out, which is after the six-month cutoff. A robustness run adds it to measure how much it inflates accuracy, the same idea as my price test.
+- **Previous tour:** the artist's most recent other tour, worldwide, using only shows that ended before the cutoff. 125 of 240 tours have one.
+- **Inflation:** previous-tour prices are converted to constant dollars with the BLS CPI-U annual average.
