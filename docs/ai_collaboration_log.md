@@ -282,3 +282,12 @@ The overall answer to the project question: chart and pageview signals measured 
 
 **My call (accepted).** The AI recommended keeping the changes and reporting both versions; I agreed. Reverting because the test scores dipped would mean picking the model by its test score, and then the test sets would no longer be a fair check. The before and after numbers are both in the notebook, so the comparison is public.
 
+
+## 38. What the dashboard is for
+**My call.** Starting Phase 3, I set the dashboard's purpose: show which metrics lead to a sellout rather than overbooking an artist into too big a room, and keep a brief Billboard run from making a buyer overconfident about where an act can play. The main user is a talent buyer checking a specific artist before booking. I chose a two-page layout from three mockups: a page that teaches the rule, and a drill-through page with a scorecard on top and the artist's tour timeline below. No sellout probabilities are shown, since the model barely beats chance on later years.
+
+## 39. Artists with no previous tour
+**My call.** About half the tours have no qualifying previous tour, so the scorecard's main tiles would be blank. I chose to show a "no previous tour" note and use career chart history instead. The AI pointed out that recent chart buzz is the thing the dashboard warns against, while career history was the one chart signal with some support, so I kept career history and a "weak signal" caption on it.
+
+## 40. Data connection and a corrected claim
+**My call (accepted).** I chose CSV exports over a SQLite ODBC driver, so anyone who clones the repo can open the template without installing a driver. A review of the design then found an error in the AI's proposal: it had said sellout rate by chart decile would look flat, but the raw view rises from 61% to 85%, because bigger acts and later years both chart more and sell out more. The flat result only holds out of sample after controls. I accepted the recommendations that followed: the chart panel shows the tested comparison (AUC with and without charts), a tour counts as flagged when at least half its shows were upsized past the rule (13 tours, not 18, so mostly-downsized tours like Noel Gallagher's drop out), the drill-through page works per tour, and the small aggregated dashboard CSVs are committed with Billboard data as totals only.
