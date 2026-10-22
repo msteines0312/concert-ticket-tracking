@@ -13,6 +13,7 @@ PRAGMA foreign_keys = ON;
 -- dropped here too, so a rebuild never leaves features from old data behind.
 DROP TABLE IF EXISTS show_features;
 DROP TABLE IF EXISTS show_features_show_date;
+DROP TABLE IF EXISTS one_hit_shows;   -- written by concert_demand.features.one_hit
 DROP VIEW IF EXISTS model_ready_engagements;
 DROP TABLE IF EXISTS spotify_credits;
 DROP TABLE IF EXISTS pageviews_daily;
