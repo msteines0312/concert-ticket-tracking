@@ -9,11 +9,13 @@ import requests
 from concert_demand.ingest import wikipedia_tours
 from concert_demand.ingest.wikipedia_tours import (
     build_source_list,
+    fetch_redirects,
     extract_artists,
     fetch_pages,
     fetch_wikitexts,
     get_json,
     parse_tour_page,
+    resolve_titles,
 )
 
 
@@ -205,3 +207,36 @@ def test_parse_tour_page_reads_year_from_table_caption():
     eng = parse_tour_page(page)
     assert eng.loc[0, "first_date"] == pd.Timestamp("2016-04-13")
     assert eng.loc[0, "artist"] == "Paul McCartney"
+
+
+# ---------------------------------------------------------------------------
+# Canonical artist titles
+# ---------------------------------------------------------------------------
+
+def test_resolve_titles_follows_redirects_normalization_and_overrides(recorded_sleeps):
+    session = FakeSession([FakeResponse(200, payload={"query": {
+        "normalized": [{"from": "the Weeknd", "to": "The Weeknd"}],
+        "redirects": [{"from": "Sam Smith (singer)", "to": "Sam Smith"}],
+        "pages": [{"title": "The Weeknd"}, {"title": "Sam Smith"}, {"title": "Adele"}],
+    }})])
+    resolved = resolve_titles(session, ["the Weeknd", "Sam Smith (singer)", "Adele", "Pentagon"],
+                              overrides={"Pentagon": "Pentagon (South Korean band)"})
+    assert resolved == {
+        "the Weeknd": "The Weeknd",
+        "Sam Smith (singer)": "Sam Smith",
+        "Adele": "Adele",
+        "Pentagon": "Pentagon (South Korean band)",  # manual override, no API call needed
+    }
+
+
+def test_fetch_redirects_follows_continuation(recorded_sleeps):
+    session = FakeSession([
+        FakeResponse(200, payload={
+            "continue": {"rdcontinue": "123", "continue": "||"},
+            "query": {"pages": [{"title": "Lady A", "redirects": [{"title": "Lady Antebellum"}]}]}}),
+        FakeResponse(200, payload={
+            "query": {"pages": [{"title": "Lady A", "redirects": [{"title": "Lady A (band)"}]},
+                                {"title": "Adele"}]}}),
+    ])
+    redirects = fetch_redirects(session, ["Lady A", "Adele"])
+    assert redirects == {"Lady A": ["Lady Antebellum", "Lady A (band)"]}

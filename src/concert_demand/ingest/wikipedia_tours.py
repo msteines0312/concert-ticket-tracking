@@ -53,8 +53,24 @@ ARTICLE_URL = "https://en.wikipedia.org/wiki/{title}"
 CACHE_DIR = RAW_DIR / "wikipedia_tours"
 OUTPUT_PATH = INTERIM_DIR / "wikipedia_engagements.csv"
 SOURCES_PATH = INTERIM_DIR / "wikipedia_sources.csv"
+REDIRECTS_PATH = INTERIM_DIR / "artist_redirects.csv"
 
 PROJECT_URL = "https://github.com/msteines0312/concert-ticket-tracking"
+
+# Artist names the API can't resolve correctly on its own, checked by hand.
+# "Pentagon" is unlinked plain text in the Prism World Tour infobox and
+# would otherwise resolve to the geometry article.
+TITLE_OVERRIDES = {
+    "Pentagon": "Pentagon (South Korean band)",
+    # Redirects to "Compilation album", which reads like a data error
+    "Various Artists": "Various Artists",
+}
+
+# Infobox "artists" that are a brand, label, TV show or compilation fronting
+# a multi-act package tour, not one artist whose popularity drives sales.
+# Flagged so the model can exclude them.
+PACKAGE_TOUR_ARTISTS = {"American Idol", "Honda Civic Tour", "Top Dawg Entertainment",
+                        "Various Artists"}
 
 WIKITEXT_BATCH_SIZE = 50  # API maximum for titles per query
 # Identified bots get 200 requests/minute. 0.35 s between calls is about
@@ -192,6 +208,82 @@ def fetch_wikitexts(session, titles):
         if resolved in pages:
             results[requested] = pages[resolved]
     return results
+
+
+def resolve_titles(session, names, overrides=TITLE_OVERRIDES):
+    """Map artist names to their canonical Wikipedia titles.
+
+    Tour pages link the same artist in different ways ("the Weeknd" vs
+    "The Weeknd", "Sam Smith (singer)" vs "Sam Smith"). Asking the API to
+    resolve each name gives one title per artist, which also matches the
+    title the pageviews API expects.
+
+    Parameters
+    ----------
+    session : requests.Session
+    names : list of str
+    overrides : dict
+        Hand-checked corrections applied instead of the API.
+
+    Returns
+    -------
+    dict
+        Name -> canonical title. Names the API doesn't recognize map to
+        themselves.
+    """
+    resolved = {name: overrides[name] for name in names if name in overrides}
+    to_query = [name for name in names if name not in overrides]
+
+    for start in range(0, len(to_query), WIKITEXT_BATCH_SIZE):
+        batch = to_query[start:start + WIKITEXT_BATCH_SIZE]
+        query = get_json(session, {
+            "action": "query", "titles": "|".join(batch), "redirects": 1,
+            "format": "json", "formatversion": 2,
+        })["query"]
+        renames = {item["from"]: item["to"] for item in query.get("normalized", [])}
+        renames.update({item["from"]: item["to"] for item in query.get("redirects", [])})
+        for name in batch:
+            title = name
+            while title in renames:  # normalization, then redirect
+                title = renames[title]
+            resolved[name] = title
+    return resolved
+
+
+def fetch_redirects(session, titles):
+    """List the redirect titles that point at each artist page.
+
+    When an artist changes their name, Wikipedia keeps the old name as a
+    redirect ("Lady Antebellum" -> "Lady A"). Chart entries from before the
+    change use the old name, so these redirects become candidate aliases.
+
+    Parameters
+    ----------
+    session : requests.Session
+    titles : list of str
+        Canonical artist titles.
+
+    Returns
+    -------
+    dict
+        Title -> list of redirect titles. Titles with none are omitted.
+    """
+    redirects = {}
+    for start in range(0, len(titles), WIKITEXT_BATCH_SIZE):
+        params = {
+            "action": "query", "prop": "redirects", "rdlimit": "max", "rdnamespace": 0,
+            "titles": "|".join(titles[start:start + WIKITEXT_BATCH_SIZE]),
+            "format": "json", "formatversion": 2,
+        }
+        while True:
+            payload = get_json(session, params)
+            for page in payload["query"]["pages"]:
+                for redirect in page.get("redirects", []):
+                    redirects.setdefault(page["title"], []).append(redirect["title"])
+            if "continue" not in payload:
+                break
+            params.update(payload["continue"])  # long redirect lists span pages
+    return redirects
 
 
 def fetch_html(session, title):
@@ -354,6 +446,40 @@ def parse_tour_page(page):
     return engagements
 
 
+def canonicalize_artists(session, engagements):
+    """Replace artist and co-headliner names with canonical titles and flag package tours.
+
+    Parameters
+    ----------
+    session : requests.Session
+    engagements : pandas.DataFrame
+        Output of `parse_tour_page` for all tours.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Same rows with artist and co_headliners resolved, plus
+        is_package_tour.
+    """
+    def split(cell):
+        return [name.strip() for name in str(cell).split(";") if name.strip()]
+
+    co_headliners = engagements["co_headliners"].fillna("")
+    names = set(engagements["artist"].dropna())
+    names.update(name for cell in co_headliners for name in split(cell))
+    titles = resolve_titles(session, sorted(names))
+
+    engagements = engagements.copy()
+    engagements["artist"] = engagements["artist"].map(titles, na_action="ignore")
+    engagements["co_headliners"] = co_headliners.map(
+        lambda cell: "; ".join(titles.get(name, name) for name in split(cell)))
+    engagements["is_package_tour"] = engagements["artist"].isin(PACKAGE_TOUR_ARTISTS)
+
+    renamed = {name: title for name, title in titles.items() if name != title}
+    logger.info("Resolved %d artist names, %d renamed: %s", len(titles), len(renamed), renamed)
+    return engagements
+
+
 def build_source_list(pages, used_titles):
     """List the articles that contributed data, for CC BY-SA attribution.
 
@@ -405,11 +531,23 @@ def run(start_year, end_year, output_path=OUTPUT_PATH, sources_path=SOURCES_PATH
     engagements = pd.concat([f for f in frames if not f.empty], ignore_index=True)
     # Redirects can make two category entries resolve to the same article
     engagements = engagements.drop_duplicates()
+    engagements = canonicalize_artists(session, engagements)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     engagements.to_csv(output_path, index=False)
     sources = build_source_list(pages, set(engagements["tour"]))
     sources.to_csv(sources_path, index=False)
+
+    # Former names and alternate spellings, used as aliases when matching charts
+    artists = sorted(set(engagements["artist"].dropna()) | {
+        name.strip() for cell in engagements["co_headliners"] for name in str(cell).split(";")
+        if name.strip()})
+    redirects = fetch_redirects(session, artists)
+    pd.DataFrame([{"artist": artist, "redirect": redirect}
+                  for artist, names in redirects.items() for redirect in names]
+                 ).to_csv(REDIRECTS_PATH, index=False)
+    logger.info("Saved %d redirects for %d artists to %s",
+                sum(map(len, redirects.values())), len(redirects), REDIRECTS_PATH)
     logger.info("Saved %d engagements from %d tours to %s",
                 len(engagements), engagements["tour"].nunique(), output_path)
     logger.info("Saved %d source articles to %s", len(sources), sources_path)
