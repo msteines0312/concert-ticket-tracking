@@ -257,3 +257,6 @@ I accepted the AI's recommendation on each of these after comparing the options:
 
 The overall answer to the project question: chart and pageview signals measured at booking barely beat knowing the room, genre and country. What does carry information is the artist's catalog and how their last tour sold, especially for deciding whether to move up a room size. Next is my review of which parts of the analysis add noise.
 
+## 35. Applying my window rule
+**My call.** In Phase 1 I set the rule that 26-week signal windows would be kept only if they beat the 52-week window plus 13-week momentum on the training years. They tied (AUC 0.640 vs. 0.637 when fitting on 2017 tours and scoring 2018 tours). I agreed that a tie doesn't meet the rule, so the models keep 52 weeks.
+
