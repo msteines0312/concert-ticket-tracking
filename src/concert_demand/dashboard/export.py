@@ -22,7 +22,9 @@ from concert_demand.dashboard.tables import (
     build_shows,
     build_tours,
 )
+from concert_demand.ingest.cpi import load_annual
 from concert_demand.load_db import DB_PATH
+from concert_demand.models.dataset import usable_history
 from concert_demand.models.sellout import TABLES_DIR
 from concert_demand.paths import DASHBOARD_DIR
 
@@ -32,7 +34,18 @@ MODEL_OUTPUTS = ["room_effect.csv", "sellout_ladders.csv"]
 
 
 def read_model_outputs(tables_dir):
-    """Load the model stage's tables, failing with a clear message if it hasn't run."""
+    """Load the model stage's tables, failing with a clear message if it hasn't run.
+
+    Parameters
+    ----------
+    tables_dir : pathlib.Path
+        reports/tables, written by `python -m concert_demand.models`.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        Keyed by file name.
+    """
     missing = [name for name in MODEL_OUTPUTS if not (tables_dir / name).exists()]
     if missing:
         raise FileNotFoundError(f"Missing {', '.join(missing)} in {tables_dir}. "
@@ -41,7 +54,18 @@ def read_model_outputs(tables_dir):
 
 
 def chart_test_table(ladders):
-    """Test AUC with controls only vs. controls + charts, per test set (page 1 chart panel)."""
+    """Test AUC with controls only vs. controls + charts, per test set (page 1 chart panel).
+
+    Parameters
+    ----------
+    ladders : pandas.DataFrame
+        sellout_ladders.csv from the model stage.
+
+    Returns
+    -------
+    pandas.DataFrame
+        test_split, step, auc, auc_low, auc_high, test_tours.
+    """
     rows = ladders[(ladders["ladder"] == "charts_first")
                    & ladders["step"].isin(["controls", "controls+charts"])]
     return rows[["test_split", "step", "auc", "auc_low", "auc_high", "test_tours"]].reset_index(drop=True)
@@ -52,6 +76,19 @@ def headline_table(room_effect, tours, shows):
 
     The comparison group is shows that had a previous tour but whose tour is
     not flagged, the same comparison the right-sizing score reports.
+
+    Parameters
+    ----------
+    room_effect : pandas.DataFrame
+        room_effect.csv (one row, with break_even_fill).
+    tours, shows : pandas.DataFrame
+        Outputs of build_tours and build_shows.
+
+    Returns
+    -------
+    pandas.DataFrame
+        One row: break_even_fill, flag_threshold, flagged_tours, flagged_shows,
+        flagged_sellout_rate, other_sellout_rate.
     """
     flagged_keys = tours.loc[tours["is_flagged"], "tour_key"]
     scored = shows[shows["upsized_past_rule"].notna()]
@@ -67,19 +104,34 @@ def headline_table(room_effect, tours, shows):
 
 
 def read_database(db_path):
-    """Read the pipeline tables the dashboard is built from."""
+    """Read the pipeline tables the dashboard is built from.
+
+    Parameters
+    ----------
+    db_path : pathlib.Path
+        The SQLite database.
+
+    Returns
+    -------
+    dict of str to pandas.DataFrame
+        history is every usable engagement worldwide, filtered by the same rules
+        the model uses to describe an artist's previous tour.
+    """
     queries = {
         "model_dataset": "SELECT * FROM model_dataset",
         "right_sizing_shows": "SELECT * FROM right_sizing_shows",
         "right_sizing_tours": "SELECT * FROM right_sizing_tours",
-        "tour_summary": "SELECT * FROM tour_summary",
-        # Same rows tour_summary aggregates, so room size and outcomes describe the same shows.
-        "engagements": "SELECT artist, tour, capacity_per_show FROM model_ready_engagements",
         "artists": "SELECT artist, genre_group FROM artists",
         "chart_credits": "SELECT chart, chart_week, rank, artist, role FROM chart_credits",
     }
     with sqlite3.connect(db_path) as connection:
-        return {name: pd.read_sql(query, connection) for name, query in queries.items()}
+        tables = {name: pd.read_sql(query, connection) for name, query in queries.items()}
+        engagements = pd.read_sql("SELECT * FROM engagements", connection,
+                                  parse_dates=["first_date", "last_date"])
+    history = usable_history(engagements, load_annual())
+    history["first_date"] = history["first_date"].dt.date
+    tables["history"] = history
+    return tables
 
 
 def run(db_path=DB_PATH, tables_dir=TABLES_DIR, out_dir=DASHBOARD_DIR):
@@ -94,8 +146,7 @@ def run(db_path=DB_PATH, tables_dir=TABLES_DIR, out_dir=DASHBOARD_DIR):
     db = read_database(db_path)
 
     shows = build_shows(db["model_dataset"], db["right_sizing_shows"])
-    tours = build_tours(db["tour_summary"], db["engagements"], db["right_sizing_tours"],
-                        db["model_dataset"])
+    tours = build_tours(db["history"], db["right_sizing_tours"], db["model_dataset"])
     artists = build_artists(tours, db["artists"])
     tables = {
         "artists": artists,
@@ -115,6 +166,7 @@ def run(db_path=DB_PATH, tables_dir=TABLES_DIR, out_dir=DASHBOARD_DIR):
 
 
 def main():
+    """Command-line entry point: export with the default paths."""
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     run()
 

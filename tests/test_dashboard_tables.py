@@ -2,12 +2,14 @@
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from concert_demand.dashboard.tables import (
     build_artists,
     build_chart_quarters,
     build_shows,
     build_tours,
+    display_name,
 )
 
 
@@ -42,31 +44,45 @@ def _right_sizing_tours(share=1.0, prev_tour="Small Tour"):
                          "share_upsized_past_rule": [share]})
 
 
-def _tour_summary(extra_rows=()):
-    rows = [("Act A", "Small Tour", "2014-04-01", 0.5, 0.85),
-            ("Act A", "Big Tour", "2019-05-01", 0.5, 0.9),
-            ("Act B", "First Tour", "2022-03-01", 1.0, 1.0), *extra_rows]
-    return pd.DataFrame(rows, columns=["artist", "tour", "tour_start", "sellout_rate", "fill_rate"])
-
-
-def _engagements():
-    return pd.DataFrame({"artist": ["Act A", "Act A", "Act A", "Act B"],
-                         "tour": ["Small Tour", "Big Tour", "Big Tour", "First Tour"],
-                         "capacity_per_show": [8000.0, 20000.0, 18000.0, 3000.0]})
+def _history(extra_rows=()):
+    """Usable engagements worldwide. Small Tour stands in for a previous tour played
+    entirely outside the US + Canada sample, so it has no model-sample shows."""
+    rows = [("Act A", "Small Tour", "2014-04-01", 8000.0, 0.6, 0),
+            ("Act A", "Small Tour", "2014-04-02", 2000.0, 1.0, 1),
+            ("Act A", "Big Tour", "2019-05-01", 20000.0, 0.8, 0),
+            ("Act A", "Big Tour", "2019-06-01", 18000.0, 1.0, 1),
+            ("Act A", "Big Tour", "2019-09-01", 18000.0, 1.0, 1),   # outside the model sample
+            ("Act B", "First Tour", "2022-03-01", 3000.0, 1.0, 1), *extra_rows]
+    return pd.DataFrame(rows, columns=["artist", "tour", "first_date", "capacity_per_show",
+                                       "fill_rate", "sold_out"])
 
 
 def _tours(**kwargs):
-    return build_tours(_tour_summary(), _engagements(), _right_sizing_tours(**kwargs), _model_dataset())
+    return build_tours(_history(), _right_sizing_tours(**kwargs), _model_dataset())
 
 
-def test_tours_keep_out_of_sample_previous_tours():
+def test_tours_include_previous_tours_played_outside_the_sample():
     tours = _tours().set_index("tour")
     assert tours.loc[["Small Tour", "Big Tour"], "in_sample"].tolist() == [False, True]
-    assert tours.loc["Small Tour", "median_room"] == 8000.0
-    assert tours.loc["Big Tour", "median_room"] == 19000.0
+    assert tours.loc["Small Tour", "tour_start"] == "2014-04-01"
+    assert tours.loc["Big Tour", "median_room"] == 18000.0
 
 
-def test_prev_tour_missing_from_summary_is_a_label_only():
+def test_tour_fill_is_a_mean_of_shows_like_the_model():
+    # The model's previous-tour fill is an unweighted mean of shows, so the timeline uses it too.
+    assert _tours().set_index("tour").loc["Small Tour", "fill_rate"] == pytest.approx(0.8)
+
+
+def test_sample_outcome_counts_only_model_sample_shows():
+    big = _tours().set_index("tour").loc["Big Tour"]
+    assert big["shows"] == 3
+    assert big["sellout_rate"] == pytest.approx(2 / 3)
+    assert big["sample_shows"] == 2
+    assert big["sample_sellout_rate"] == pytest.approx(0.5)
+    assert big["sample_fill_rate"] == pytest.approx(0.9)
+
+
+def test_prev_tour_missing_from_history_is_a_label_only():
     tours = _tours(prev_tour="Ghost Tour")
     assert tours.loc[tours["tour"] == "Big Tour", "prev_tour"].item() == "Ghost Tour"
     assert "Ghost Tour" not in tours["tour"].tolist()
@@ -84,12 +100,10 @@ def test_tour_without_previous_tour_is_not_flagged():
 
 
 def test_latest_in_sample_is_one_per_artist():
-    extra = [("Act A", "Later Tour", "2023-01-01", 1.0, 1.0)]
+    extra = [("Act A", "Later Tour", "2023-01-01", 20000.0, 1.0, 1)]
     dataset = pd.concat([_model_dataset(), _model_dataset().iloc[[0]].assign(
         engagement_id=4, tour="Later Tour", first_date="2023-01-01")])
-    engagements = pd.concat([_engagements(), pd.DataFrame(
-        {"artist": ["Act A"], "tour": ["Later Tour"], "capacity_per_show": [20000.0]})])
-    tours = build_tours(_tour_summary(extra), engagements, _right_sizing_tours(), dataset)
+    tours = build_tours(_history(extra), _right_sizing_tours(), dataset)
     latest = tours[tours["is_latest_in_sample"]]
     assert latest.groupby("artist").size().tolist() == [1, 1]
     assert latest.set_index("artist").loc["Act A", "tour"] == "Later Tour"
@@ -136,3 +150,14 @@ def test_chart_quarters_have_no_ranks_or_titles():
     assert hot100["lead_points"].tolist() == [101]
     assert hot100["quarter_start"].astype(str).tolist() == ["2019-01-01"]
     assert quarters.loc[quarters["chart"] == "billboard200", "lead_points"].tolist() == [1]
+
+
+def test_display_name_drops_wikipedia_disambiguators():
+    named = pd.Series(["Halsey (singer)", "Eden (Irish musician)", "Ricky Martin"])
+    assert display_name(named).tolist() == ["Halsey", "Eden", "Ricky Martin"]
+
+
+def test_artists_carry_a_display_name():
+    artists = build_artists(_tours(), pd.DataFrame({"artist": ["Act A", "Act B"],
+                                                    "genre_group": ["Pop", "Latin"]}))
+    assert artists["display_name"].tolist() == ["Act A", "Act B"]

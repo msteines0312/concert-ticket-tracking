@@ -46,7 +46,7 @@ The Phase 2 results support that framing:
 - Headline text: moving an act into a bigger room only paid off when their last tour was about 93%+ full.
   The number must come from the current break-even in the pipeline, not be typed by hand.
 - Sellout-rate grid (matrix with conditional formatting): rows = previous-tour fill bucket
-  (< 90%, 90-95%, 95-100%, 100%), columns = room change (smaller, same, up to 2x, 2x+), cells = sellout rate
+  (Under 90%, 90-95%, 95-99.9%, 100%), columns = room change (smaller, same, up to 2x, 2x+), cells = sellout rate
   with show count.
 - Chart buzz panel (Matt accepted the recommendation after the builder check): test AUC for controls only
   vs. controls + chart signals, on the 2019 and 2022-25 tests. Caption: "Charts look like they matter, but
@@ -69,9 +69,21 @@ Grain (Matt accepted the recommendation): the page is about one tour. Drill-thro
 buyer picks an artist from the slicer instead, the page shows that artist's latest tour, with a tour
 slicer to switch. Tiles and hype vs. outcome are per tour; the timeline covers the whole career.
 
-Timeline scope (Claude's calls): every tour by the artist in tour_summary is drawn, including previous
-tours outside the US + Canada sample, so the "last tour" tile points at a visible bar. The chart strip
-covers the whole career.
+Timeline scope (Claude's calls): every tour by the artist is drawn, including previous tours outside
+the US + Canada sample, so the "last tour" tile points at a visible bar. The chart strip covers the whole
+career.
+
+After the final code review (Matt accepted the recommendations): the first build used tour_summary, which
+is US + Canada only, so 7 previous tours (Halsey's Manic World Tour, Drake's Assassination Vacation Tour)
+had no bar, and the tiles and timeline described the same tour with different numbers (Niall Horan: 78.3%
+vs 50.8% full). Now:
+- Timeline tours come from the same usable worldwide history the model uses for previous tours, with fill
+  as an unweighted mean of shows, so a previous tour's bar matches the tiles.
+- The tiles are labeled "at booking time": they count only shows finished before the booking cutoff, so a
+  previous tour still running at booking can differ slightly from its bar.
+- "What happened" uses the tour's US + Canada model-sample shows (sample_sellout_rate, sample_fill_rate)
+  with the show count next to it, since some tours have only one sample show.
+- Artist names show a display name without Wikipedia's disambiguator ("Halsey", not "Halsey (singer)").
 
 Top, scorecard (Matt: scorecard on top, timeline below):
 - Tiles: last tour fill rate, room vs. last tour (ratio), upsize risk flag.

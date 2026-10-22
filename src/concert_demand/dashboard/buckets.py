@@ -19,7 +19,21 @@ FILL_ORDER = ["Under 90%", "90-95%", "95-99.9%", "100%"]
 
 
 def _bucket(values, conditions, labels):
-    """Label each value by the first condition it meets; missing values stay missing."""
+    """Label each value by the first condition it meets; missing values stay missing.
+
+    Parameters
+    ----------
+    values : pandas.Series
+        The numbers being bucketed.
+    conditions : list of pandas.Series
+        Boolean masks, checked in order.
+    labels : list of str
+        One label per condition.
+
+    Returns
+    -------
+    pandas.Series
+    """
     labeled = np.select(conditions, labels, default="")
     return pd.Series(labeled, index=values.index).replace("", np.nan).where(values.notna())
 
@@ -59,5 +73,18 @@ def prev_fill_bucket(fill):
 
 
 def is_flagged_tour(share_upsized, threshold=FLAG_THRESHOLD):
-    """True when at least `threshold` of a tour's shows were upsized past the rule."""
+    """True when at least `threshold` of a tour's shows were upsized past the rule.
+
+    Parameters
+    ----------
+    share_upsized : pandas.Series
+        Share of each tour's shows with upsized_past_rule = 1.
+    threshold : float, default FLAG_THRESHOLD
+        Matt's rule: half or more.
+
+    Returns
+    -------
+    pandas.Series
+        Boolean; NaN shares (no previous tour) compare as False.
+    """
     return share_upsized >= threshold
