@@ -81,6 +81,20 @@ def summarize_tours(scores):
             .sort_values("median_odds_multiplier"))
 
 
+def save_room_effect(effect, tables_dir=sellout.TABLES_DIR):
+    """Save the room terms and break-even so the dashboard reads them instead of a typed number.
+
+    Returns
+    -------
+    pathlib.Path
+        The CSV written (one row).
+    """
+    columns = ["room_main", "room_interaction", "interaction_p", "break_even_fill"]
+    path = tables_dir / "room_effect.csv"
+    pd.DataFrame([effect])[columns].to_csv(path, index=False)
+    return path
+
+
 def run(dataset_path=DATASET_PATH, db_path=DB_PATH):
     """Score every show, summarize by tour, and save both (CSV + database for the dashboard)."""
     dataset = sellout.add_model_columns(pd.read_csv(dataset_path))
@@ -93,6 +107,7 @@ def run(dataset_path=DATASET_PATH, db_path=DB_PATH):
     sellout.TABLES_DIR.mkdir(parents=True, exist_ok=True)
     scores.to_csv(sellout.TABLES_DIR / "right_sizing_shows.csv", index=False)
     tours.to_csv(sellout.TABLES_DIR / "right_sizing_tours.csv", index=False)
+    save_room_effect(effect)
     with sqlite3.connect(db_path) as connection:
         scores.to_sql("right_sizing_shows", connection, if_exists="replace", index=False)
         tours.to_sql("right_sizing_tours", connection, if_exists="replace", index=False)

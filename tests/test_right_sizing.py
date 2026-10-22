@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from concert_demand.models.right_sizing import score_shows
+from concert_demand.models.right_sizing import save_room_effect, score_shows
 
 # Doubling the room: odds x e^0.35 after a full tour, break-even at 95% full.
 EFFECT = {"room_main": 0.35, "room_interaction": -7.0, "break_even_fill": 0.95}
@@ -34,3 +34,11 @@ def test_downsizing_is_not_scored_as_a_risk():
 
 def test_shows_without_a_previous_tour_are_not_scored():
     assert score_shows(_shows([np.nan], [np.nan]), EFFECT).empty
+
+
+def test_room_effect_is_saved_for_the_dashboard(tmp_path):
+    path = save_room_effect({**EFFECT, "interaction_p": 0.001}, tmp_path)
+    saved = pd.read_csv(path)
+    assert path.name == "room_effect.csv"
+    assert saved.columns.tolist() == ["room_main", "room_interaction", "interaction_p", "break_even_fill"]
+    assert saved["break_even_fill"].iloc[0] == pytest.approx(0.95)
