@@ -63,3 +63,17 @@ def test_production_evidence_reads_stage_sections_and_drops_citations():
     assert has_section
     assert "twelve dancers" in evidence
     assert "cite web" not in evidence
+
+
+def test_production_evidence_skips_tour_date_and_cancellation_sections():
+    wikitext = ("Lead.\n\n==Shows==\nThe stage had dancers on every date in the table.\n\n"
+                "==Cancelled shows==\nThe stage show with dancers was cancelled in Oslo.\n")
+    evidence, has_section = production_evidence(wikitext)
+    assert evidence == ""
+    assert not has_section     # "Shows" is not a production heading
+
+
+def test_opening_acts_do_not_count_as_a_show_in_acts():
+    wikitext = "Lead.\n\n==Background==\nThree opening acts supported the band on every date.\n"
+    evidence, _ = production_evidence(wikitext)
+    assert evidence == ""

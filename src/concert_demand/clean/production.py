@@ -44,22 +44,31 @@ EVIDENCE_PATH = INTERIM_DIR / "production_evidence.csv"
 # anchored to the end of the line: some headings carry trailing markup.
 SET_LIST_HEADING = re.compile(r"^(=+)[^=\n]*\bset ?lists?\b[^=\n]*=+", re.IGNORECASE | re.MULTILINE)
 ANY_HEADING = re.compile(r"^(=+)[^=\n]+=+", re.MULTILINE)
+# Section headings about the show itself. "\bshow\b" is singular on purpose:
+# a first version also matched "Shows" and "Cancelled shows", which pulled
+# tour-date tables in as production evidence.
 PRODUCTION_HEADING = re.compile(
-    r"stage|production|staging|concert synopsis|synopsis|show|design|visual|development|concept",
-    re.IGNORECASE)
-# Words that signal a sentence describes the show itself
-PRODUCTION_WORDS = re.compile(
-    r"dancer|choreograph|stage|set piece|pyrotechnic|flames|fireworks|costume|catwalk|runway"
-    r"|b-stage|\bacts?\b|segment|\beras?\b|theme|themed|narrative|storyline|concept|props?\b"
-    r"|aerial|hydraulic|lift|screen|LED|lighting|lights|acoustic|stripped",
-    re.IGNORECASE)
+    r"stage|production|staging|synopsis|\bshow\b|design|visual|concept", re.IGNORECASE)
+SKIP_HEADING = re.compile(r"cancel|postpon|date|box ?score|gross|personnel|set ?list|broadcast",
+                          re.IGNORECASE)
+# Terms that mark a sentence as describing the production, one per rubric
+# ingredient. "Opening act" is removed before matching so support acts
+# don't read as a show split into acts.
+PRODUCTION_TERMS = [
+    r"dancers?", r"choreograph\w*", r"set pieces?", r"pyrotechnic\w*|flames|fireworks",
+    r"costume\w*|outfits?", r"catwalk|runway|b-stage|secondary stage|satellite stage|\b360\b",
+    r"hydraulic\w*|aerial|harness|conveyor|inflatable|props?\b", r"\bacts?\b|segments?|\beras?\b",
+    r"themed?|narrative|storyline|story|concept\w*|theatrical",
+    r"stage design|staging|stage (?:was|is|resembl|featur|consist)", r"stripped[- ]down|minimal\w*|acoustic",
+]
+PRODUCTION_PATTERNS = [re.compile(term, re.IGNORECASE) for term in PRODUCTION_TERMS]
+OPENING_ACT = re.compile(r"opening acts?|support(?:ing)? acts?", re.IGNORECASE)
 # Workaround, not a fix: a few articles use set-list formats the counter
 # doesn't handle (Renaissance's comes from a credits list). Rather than
 # parse every format, counts outside this range are kept but flagged as
 # suspect so Phase 2 can leave them out deliberately.
 PLAUSIBLE_SET_LENGTH = (10, 50)
-SECTION_WORD_LIMIT = 150
-MAX_SENTENCES = 6
+MAX_SENTENCES = 8
 
 logger = logging.getLogger(__name__)
 
@@ -119,31 +128,43 @@ def _plain(wikicode):
     return re.sub(r"\s+", " ", wikicode.strip_code()).strip()
 
 
+def production_score(sentence):
+    """How many different rubric ingredients a sentence mentions."""
+    text = OPENING_ACT.sub("", sentence)
+    return sum(bool(pattern.search(text)) for pattern in PRODUCTION_PATTERNS)
+
+
 def production_evidence(wikitext):
-    """Text describing the show: production sections first, then matching sentences.
+    """The sentences that best describe the show, ranked by production terms.
+
+    Sentences come from the whole article except sections that are tables
+    or logistics (dates, cancellations, box office). Those inside a stage or
+    production section get one extra point, since they're about the show by
+    construction.
 
     Returns
     -------
     tuple of (str, bool)
-        The evidence (at most a few hundred words), and whether the article
-        has a section about the stage or production.
+        Up to MAX_SENTENCES sentences in article order, and whether the
+        article has a section about the stage or production.
     """
     parsed = mwparserfromhell.parse(wikitext)
-    pieces, has_section = [], False
-    for section in parsed.get_sections(levels=[2, 3], include_lead=False):
+    scored, has_section = [], False
+    for position, section in enumerate(parsed.get_sections(levels=[2], include_lead=True)):
         headings = section.filter_headings()
         title = str(headings[0].title).strip() if headings else ""
-        if PRODUCTION_HEADING.search(title) and not re.search(r"set ?list|tour dates|box", title, re.I):
-            has_section = True
-            body = _plain(mwparserfromhell.parse(str(section).split("\n", 1)[-1]))
-            words = body.split()
-            pieces.append(f"[{title}] " + " ".join(words[:SECTION_WORD_LIMIT]))
+        if SKIP_HEADING.search(title):
+            continue
+        in_production = bool(PRODUCTION_HEADING.search(title))
+        has_section = has_section or in_production
+        for sentence in re.split(r"(?<=[.!?])\s+", _plain(mwparserfromhell.parse(str(section)))):
+            score = production_score(sentence) + in_production
+            if score >= 1 + in_production and 20 < len(sentence) < 500:
+                scored.append((score, position, sentence))
 
-    seen = " ".join(pieces)
-    sentences = re.split(r"(?<=[.!?])\s+", _plain(mwparserfromhell.parse(wikitext)))
-    extra = [s for s in sentences if PRODUCTION_WORDS.search(s) and s not in seen and len(s) < 400]
-    pieces += extra[:MAX_SENTENCES]
-    return " | ".join(pieces), has_section
+    best = sorted(scored, key=lambda item: -item[0])[:MAX_SENTENCES]
+    in_order = [sentence for _, _, sentence in sorted(best, key=lambda item: item[1])]
+    return " | ".join(in_order), has_section
 
 
 def model_sample_tours(db_path=DB_PATH):

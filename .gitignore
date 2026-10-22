@@ -3,6 +3,10 @@
 data/**
 !data/*/
 !data/**/.gitkeep
+# Hand-made labels can't be rebuilt by a script, so they are committed.
+# They are original judgments about Wikipedia articles (CC BY-SA).
+!data/labels/
+!data/labels/**
 *.db
 *.sqlite
 *.sqlite3
