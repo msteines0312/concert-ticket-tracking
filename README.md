@@ -9,11 +9,19 @@ A data pipeline and set of models that test whether Billboard chart success, mea
 - **Fill rate is hard to predict.** When a show doesn't sell out, no model beat simply predicting the training average.
 - **Ticket price leaks the outcome.** Same-show prices improve the model only because dynamic pricing reacts to demand, so the main models use the previous tour's price instead.
 
+![Test AUC by signal block, with 95% intervals from resampling tours](reports/figures/sellout_auc.png)
+
+Test AUC as each signal block is added. Every interval overlaps the baseline, so chart and pageview signals don't add reliable predictive power.
+
+![Odds multiplier for doubling the room, by how full the previous tour was](reports/figures/room_upsizing.png)
+
+How doubling the room changes the odds of a sellout, depending on how full the artist's last tour was. The shaded band is the range across 115 refits that each leave out one tour.
+
 ## Tech Stack
 - Python 3.13: pandas, NumPy, SciPy, scikit-learn, statsmodels (logistic regression with artist-clustered standard errors)
 - SQLite with SQL views (CTEs, window functions) as the analysis layer
 - mwparserfromhell, lxml and the MediaWiki API for Wikipedia tour tables; pypdf and Tesseract OCR for the Pollstar validation PDFs
-- pytest (323 tests) and Jupyter notebooks for the walkthroughs
+- pytest (325 tests), matplotlib and Jupyter notebooks for the walkthroughs
 - Power BI for the dashboard (in progress)
 
 ## How to Run
@@ -48,11 +56,15 @@ The raw data is not committed, so a full rebuild downloads everything. That take
    ```bash
    python -m concert_demand.models
    ```
-5. Export the dashboard tables to `data/dashboard/`:
+5. Redraw the README figures in `reports/figures/`:
+   ```bash
+   python -m concert_demand.figures
+   ```
+6. Export the dashboard tables to `data/dashboard/`:
    ```bash
    python -m concert_demand.dashboard
    ```
-6. Run the tests with `pytest`, and open `notebooks/01_signal_exploration.ipynb` and `notebooks/02_models.ipynb` for the walkthroughs.
+7. Run the tests with `pytest`, and open `notebooks/01_signal_exploration.ipynb` and `notebooks/02_models.ipynb` for the walkthroughs.
 
 The Pollstar validation (`python -m concert_demand.ingest.pollstar`) is optional. It downloads the year-end PDFs, and reading the scanned 2019 chart needs [Tesseract](https://github.com/UB-Mannheim/tesseract) installed.
 
@@ -75,6 +87,7 @@ src/concert_demand/
 sql/             database schema and analysis views
 notebooks/       signal exploration and model walkthroughs
 reports/tables/  model results (CSV)
+reports/figures/ README figures
 data/labels/     hand-made production labels (committed)
 data/dashboard/  dashboard tables (committed)
 docs/            AI collaboration log, Wikipedia source list, design docs
