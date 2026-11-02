@@ -2,6 +2,8 @@
 
 A data pipeline and set of models that test whether Billboard chart success, measured when a show is booked, predicts whether it sells out. It is built for talent buyers deciding what size room to put an artist in. The short answer is no: recent chart buzz barely improves the forecast, while how full the artist's last tour was does say something about whether moving them up a room size will work.
 
+**Short version:** the two-page [talent buyer brief](docs/brief.pdf) covers the findings and how I tested them.
+
 ## Results
 - **Chart buzz doesn't forecast sellouts.** On tours the models never saw, adding chart signals to a baseline of room size and market left test AUC at 0.587 on 2022-25 tours. On 2019 tours it went from 0.450 to 0.538, with a wide interval on the gain (-0.10 to +0.27). Raw sellout rates do rise with chart activity, but that pattern comes from bigger acts and later years, not from the charts themselves.
 - **The last tour matters when upsizing.** Doubling the room after a 100%-full tour multiplies the odds of a sellout by about 2.4. After a tour that was less than 92.9% full, upsizing lowers them (interaction p = 0.001). The result held when any single tour was left out and under a 97% sellout definition.
@@ -11,7 +13,7 @@ A data pipeline and set of models that test whether Billboard chart success, mea
 
 ![Test AUC by signal block, with 95% intervals from resampling tours](reports/figures/sellout_auc.png)
 
-Test AUC as each signal block is added. Every interval overlaps the baseline, so chart and pageview signals don't add reliable predictive power.
+Test AUC as each signal block is added. No step clearly beats room size and market alone: every interval overlaps the baseline.
 
 ![Odds multiplier for doubling the room, by how full the previous tour was](reports/figures/room_upsizing.png)
 
@@ -90,7 +92,7 @@ reports/tables/  model results (CSV)
 reports/figures/ README figures
 data/labels/     hand-made production labels (committed)
 data/dashboard/  dashboard tables (committed)
-docs/            AI collaboration log, Wikipedia source list, design docs
+docs/            talent buyer brief (PDF + HTML source), AI collaboration log, Wikipedia source list, design docs
 tests/           pytest suite
 ```
 
@@ -155,4 +157,4 @@ Data that hasn't been used yet will be added here when it is. That includes Poll
 The biggest lesson was judging which features actually add signal and which only add noise, and testing that on the training data instead of keeping whatever scored best on the test set. I also learned to use AI as a tool rather than letting it run with everything: I made the design calls, and the [collaboration log](docs/ai_collaboration_log.md) records where I pushed back or changed course.
 
 ## Status
-Phase 1 (data pipeline) and Phase 2 (models) are complete. Phase 3 is in progress: a Power BI dashboard for talent buyers and a written brief.
+Phase 1 (data pipeline) and Phase 2 (models) are complete. The talent buyer brief is done. The Power BI dashboard for talent buyers is in progress.

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<!--
+  Talent buyer brief. Edit the text here, then rebuild the PDF from the repo root:
+  "C:\Program Files\Google\Chrome\Application\chrome.exe" --headless --no-pdf-header-footer
+      --print-to-pdf=<full path to>\docs\brief.pdf docs/brief/brief.html
+  Chrome resolves a relative output path from its own folder, so give it the full path.
+  Every number comes from reports/tables/ or data/dashboard/headline.csv.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Should Chart Buzz Decide the Room?</title>
+<style>
+  @page { size: Letter; margin: 0.6in 0.7in; }
+  body { font-family: "Segoe UI", Arial, sans-serif; font-size: 10.5pt; line-height: 1.42;
+         color: #1a1a1a; margin: 0; }
+  h1 { font-size: 19pt; margin: 0 0 2pt; }
+  .byline { color: #52514e; font-size: 9.5pt; margin-bottom: 12pt; }
+  .byline a { color: #2a78d6; text-decoration: none; }
+  h2 { font-size: 12.5pt; margin: 14pt 0 4pt; border-bottom: 1px solid #e4e3df; padding-bottom: 2pt; }
+  p { margin: 0 0 7pt; }
+  ul { margin: 0 0 7pt; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+  .answer { background: #f3f6fb; border-left: 3px solid #2a78d6; padding: 7pt 10pt; margin: 0 0 8pt; }
+  figure { margin: 6pt 0 8pt; break-inside: avoid; }
+  figure img { width: 58%; display: block; margin: 0 auto; }
+  figcaption { font-size: 8.5pt; color: #52514e; text-align: center; margin-top: 2pt; }
+  table { border-collapse: collapse; font-size: 9.5pt; margin: 2pt 0 8pt; }
+  th, td { text-align: left; padding: 2pt 12pt 2pt 0; border-bottom: 1px solid #e4e3df; }
+  .sources { font-size: 8pt; color: #52514e; margin-top: 12pt; border-top: 1px solid #e4e3df; padding-top: 5pt; }
+  .sources p { margin-bottom: 3pt; }
+</style>
+</head>
+<body>
+
+<h1>Should Chart Buzz Decide the Room?</h1>
+<div class="byline">What 5,806 concerts say about sizing a tour &middot; Matt Steines &middot; November 2026 &middot;
+  <a href="https://github.com/msteines0312/concert-ticket-tracking">github.com/msteines0312/concert-ticket-tracking</a></div>
+
+<div class="answer"><strong>Short answer:</strong> no. A fresh Billboard run barely improves a sellout forecast once
+  you know the room size and the market. The more useful number is how full the artist's last tour was. Moving an act
+  into a bigger room paid off after a tour that was about 93% full or better, and backfired below that.</div>
+
+<h2>The question</h2>
+<p>A talent buyer usually books an artist months before the show, sometimes while one of their songs is still
+  climbing the charts. Too small a room leaves money on the table. Too big a room means empty seats, which hurts the
+  artist and the venue. I wanted to know whether chart and streaming attention, measured six months out when a show
+  would typically be booked, predicts which shows sell out. And if it doesn't, what should a buyer look at instead?</p>
+
+<h2>Finding 1: upsizing works only after a nearly full tour</h2>
+<p>For artists with a previous tour, I compared each show's room with that tour's typical room. When the last tour
+  was 100% full, doubling the room multiplied the odds of a sellout by about 2.4. After a 95%-full tour the gain
+  shrinks to 1.3, and after a 90%-full tour doubling <em>cuts</em> the odds to 0.7. The break-even is
+  <strong>92.9% full</strong>.</p>
+<figure>
+  <img src="../../reports/figures/room_upsizing.png" alt="Odds multiplier for doubling the room, by previous tour fill rate">
+  <figcaption>The shaded band is the range across 115 refits that each leave out one tour.</figcaption>
+</figure>
+<p>Halsey's Love and Power Tour is the clearest case. Her previous tour was 83% full, the new rooms were 2.4 times
+  bigger, and 2 of 21 shows sold out. The pattern held when any single tour was left out (break-even between 91.1%
+  and 94.7%) and when "sold out" was loosened to 97% full. Shrinking the room showed no effect either way.</p>
+
+<h2>Finding 2: chart buzz doesn't forecast sellouts</h2>
+<p>The raw numbers make charts look useful: artists with more chart activity do sell out more often. Most of that
+  comes from bigger acts charting more and from later years selling out more. Once room size and market are in the
+  model, the charts add almost nothing. I trained on 2017-18 tours and tested on tours the models never saw. On
+  2022-25 tours, adding chart signals left AUC at 0.587, where 0.5 is a coin flip. On 2019 tours it rose from 0.450
+  to 0.538, but with only 36 test tours the interval on that gain runs from -0.10 to +0.27. Wikipedia pageviews and
+  Spotify streams did no better.</p>
+<figure>
+  <img src="../../reports/figures/sellout_auc.png" alt="Test AUC as each signal block is added">
+  <figcaption>Each step adds a block of signals. Bars are 95% intervals from resampling whole tours.</figcaption>
+</figure>
+
+<h2>How a buyer could use this</h2>
+<p>Before making an offer in a bigger room, ask one question: was the last tour at least 93% full? Looking back,
+  13 tours had at least half their shows upsized against that rule, and they sold out less often.</p>
+<table>
+  <tr><th></th><th>Shows</th><th>Sold out</th></tr>
+  <tr><td>Upsized against the rule (13 tours)</td><td>211</td><td>70.1%</td></tr>
+  <tr><td>Every other show with a previous tour (106 tours)</td><td>2,716</td><td>79.3%</td></tr>
+</table>
+<p>The check only needs two numbers a buyer already has: the last tour's fill rate and the size of the new room.
+  A song climbing the charts can still be a good reason to look at an act. It just isn't evidence that the act can
+  fill a bigger room.</p>
+
+<h2>How I tested it</h2>
+<ul>
+  <li>Attendance and capacity for each show come from Wikipedia box score tables for 240 tours (US and Canada,
+    2016-2026). I checked them against Pollstar's year-end charts, and 95% of 476 matched engagements agree within 1%.</li>
+  <li>Chart, pageview and Spotify signals are all measured six months before the show, around when it would be
+    booked. One test floods every later date with fake hype and confirms none of the features change.</li>
+  <li>Shows on the same tour are near-copies, so each tour goes entirely to training or entirely to testing. Models
+    train on 2017-18 tours and are scored on 2019 and on 2022-25.</li>
+  <li>Same-show ticket price looked predictive at first. Dynamic pricing was reacting to demand, so the price was
+    partly the outcome itself. The models use the previous tour's price instead.</li>
+</ul>
+
+<h2>Limits</h2>
+<ul>
+  <li>The sample leans toward big tours. A tour only gets in if it has a Wikipedia article with box office numbers,
+    and 68% of shows in the data sold out. Club and theater acts may behave differently.</li>
+  <li>The data is observational. The upsizing rule describes how past bookings turned out, and buyers may have known
+    things the data doesn't. I'd use it as a check before an offer rather than as a forecast.</li>
+  <li>When a show doesn't sell out, how full it gets is hard to predict. No model beat just guessing the average.</li>
+</ul>
+
+<div class="sources">
+  <p><strong>Sources.</strong> Wikipedia concert tour articles, 2015-2025 (CC BY-SA 4.0), with a per-article list in
+    docs/wikipedia_sources.csv. Billboard Hot 100 and Billboard 200 charts via utdata/rwd-billboard-data (chart data
+    &copy; Billboard). Wikimedia Pageviews API (CC0). Spotify charts via Kaggle, 2017-2021. Pollstar year-end Top
+    Concert Grosses 2019, 2022 and 2023, used for validation only (&copy; Pollstar). BLS CPI-U for 2024 dollars.</p>
+</div>
+
+</body>
+</html>
