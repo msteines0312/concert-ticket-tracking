@@ -110,3 +110,14 @@ def test_shows_outside_the_spotify_window_leave_the_spotify_ladder():
     out = add_model_columns(data)
     assert out["log_spotify_lead_streams_52w"].isna().tolist() == [False, True]
     assert out["log_n_shows"].tolist() == pytest.approx([0.0, np.log(2)])
+
+
+def test_themed_counts_as_enhanced_in_the_models():
+    data = pd.DataFrame({"production_level": ["standard", "enhanced", "themed", None],
+                         "set_list_songs": [20, 22, 25, None], "set_list_suspect": [0, 0, 0, 0],
+                         "split": ["train"] * 4})
+    out = sellout.add_production_columns(data)
+    assert out["production_enhanced"].tolist() == [0, 1, 1, 0]
+    assert out["production_standard"].tolist() == [1, 0, 0, 0]
+    assert "production_themed" not in out
+    assert out["production_described"].tolist() == [1, 1, 1, 0]

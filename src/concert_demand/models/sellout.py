@@ -85,7 +85,8 @@ BLOCKS = {
     "history": ["prev_tour_sellout_rate", "prev_tour_fill_rate", "log_prev_tour_price"],
     "room": ["room_up", "room_up_x_prev_unfilled", "room_down", "room_down_x_prev_unfilled"],
     # Reference level: the article doesn't describe the show.
-    "production": ["production_standard", "production_enhanced", "production_themed",
+    # Themed is folded into enhanced (see add_production_columns).
+    "production": ["production_standard", "production_enhanced",
                    "has_set_length", "set_length_songs"],
     "production_described": ["production_described"],
     # Only for the demos and sub-analyses below, never the main model.
@@ -170,12 +171,18 @@ def add_model_columns(dataset):
 def add_production_columns(out):
     """Production level dummies and set length (Matt's production rubric).
 
+    Themed counts as enhanced. Matt's blind check of 40 tours agreed with
+    the AI labels only 61% of the time (kappa 0.39), and 7 of the 12
+    disagreements were themed vs. enhanced, so that line can't be drawn
+    reliably from article text. Merged, agreement is 84%. The label file
+    keeps all three levels; only the model merges them.
+
     Set length is missing for some tours, and three suspect counts (outside
     10-50 songs) are treated as missing. Missing values get the training
     median plus a has_set_length flag, so those tours stay in the sample.
     """
-    level = out["production_level"].fillna("not_described")
-    for name in ["standard", "enhanced", "themed"]:
+    level = out["production_level"].fillna("not_described").replace({"themed": "enhanced"})
+    for name in ["standard", "enhanced"]:
         out[f"production_{name}"] = (level == name).astype(int)
     out["production_described"] = (level != "not_described").astype(int)
     songs = out["set_list_songs"].where(out["set_list_suspect"] != 1)

@@ -144,7 +144,7 @@ Data that hasn't been used yet will be added here when it is. That includes Poll
 - Only 5 model-ready US shows took place during the shutdown (March 2020 to August 2021), so the COVID analysis compares before and after, not during.
 
 **Production level and one-hit acts**
-- Production level is labeled from what each tour's Wikipedia article says. 149 of 240 articles don't describe the show at all, and the ones that do skew toward notable productions, so plain shows are underrepresented (11 labeled Standard). Labels were made with AI assistance from a rubric I wrote. A blind hand-check of 40 tours is still to come.
+- Production level is labeled from what each tour's Wikipedia article says. 149 of 240 articles don't describe the show at all, and the ones that do skew toward notable productions, so plain shows are underrepresented (11 labeled Standard). Labels were made with AI assistance from a rubric I wrote. I blind-labeled a random 40 tours, and on the 31 with text we agreed only 61% of the time (Cohen's kappa 0.39). Most misses were themed vs. enhanced, a line article text can't draw reliably, so the models merge those two levels (84% agreement). Production level didn't improve predictions either way.
 - Only two acts meet the one-hit definition (Kim Petras and Tate McRae), so that analysis is a case study, not a model feature.
 
 **What the results can and can't say**
