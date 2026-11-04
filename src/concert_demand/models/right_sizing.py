@@ -3,8 +3,8 @@
 Matt's design (2026-10-21): the score is built from the one finding that
 survived the robustness checks. Doubling the room raises the odds of a
 sellout after a tour that was 100% full and lowers them after one that
-wasn't; the break-even is about 95% full, and it held when any single tour
-was left out and under the 97% sellout definition.
+wasn't; the fitted break-even is about 92.9% full, and it held when any
+single tour was left out and under the 97% sellout definition.
 
 Per show with a previous tour:
 - upsize_odds_multiplier: how growing the room changed the odds of a
@@ -13,7 +13,7 @@ Per show with a previous tour:
   the move hurt. A smaller room gets 1.0: growing and shrinking are
   modeled separately (noise review), and shrinking showed no effect.
 - upsized_past_rule: the room grew and the previous tour was less full
-  than the break-even, i.e. the buyer upsized against the 95% rule.
+  than the break-even, i.e. the buyer upsized against the rule.
 
 The model behind the score is fit on these same shows, so the score
 describes past bookings. It is not a tested forecast: the room terms did
