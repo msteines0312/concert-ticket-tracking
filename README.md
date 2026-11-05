@@ -23,7 +23,7 @@ How doubling the room changes the odds of a sellout, depending on how full the a
 - Python 3.13: pandas, NumPy, SciPy, scikit-learn, statsmodels (logistic regression with artist-clustered standard errors)
 - SQLite with SQL views (CTEs, window functions) as the analysis layer
 - mwparserfromhell, lxml and the MediaWiki API for Wikipedia tour tables; pypdf and Tesseract OCR for the Pollstar validation PDFs
-- pytest (325 tests), matplotlib and Jupyter notebooks for the walkthroughs
+- pytest (326 tests), matplotlib and Jupyter notebooks for the walkthroughs
 - Power BI for the dashboard (in progress)
 
 ## How to Run
